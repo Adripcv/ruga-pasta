@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-ssr
+*.local
+*.log
+.DS_Store
+npm-debug.log*
+.freebuff/
+vite-dev.log

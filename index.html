@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ruga Pasta — Pasta & cuisine italienne à Aix-en-Provence</title>
+    <meta
+      name="description"
+      content="Découvrez Ruga Pasta à Aix-en-Provence : pâtes gourmandes, restauration rapide italienne, sur place, à emporter et en livraison."
+    />
+    <meta name="theme-color" content="#C93227" />
+    <meta name="geo.region" content="FR-13" />
+    <meta name="geo.placename" content="Aix-en-Provence" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ruga Pasta" />
+    <meta property="og:title" content="Ruga Pasta — Pasta & cuisine italienne à Aix-en-Provence" />
+    <meta
+      property="og:description"
+      content="Découvrez Ruga Pasta à Aix-en-Provence : pâtes gourmandes, restauration rapide italienne, sur place, à emporter et en livraison."
+    />
+    <meta property="og:image" content="/images/hero.webp" />
+    <meta property="og:locale" content="fr_FR" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/images/hero.webp" fetchpriority="high" />
+
+    <!-- Données structurées Schema.org -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": ["Restaurant", "FoodEstablishment"],
+        "name": "Ruga Pasta",
+        "description": "Pasta bar italien à Aix-en-Provence : pâtes gourmandes à savourer sur place, à emporter ou en livraison sans contact.",
+        "telephone": "+33 4 42 23 37 08",
+        "priceRange": "1–10 €",
+        "servesCuisine": ["Italienne", "Pâtes"],
+        "hasMenu": "/images/carte-ruga-pasta.png",
+        "openingHoursSpecification": [
+          {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday"
+            ],
+            "opens": "11:00",
+            "closes": "21:00"
+          },
+          {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": "Sunday",
+            "opens": "00:00",
+            "closes": "00:00"
+          }
+        ],
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "7 Rue Rifle Rafle",
+          "postalCode": "13100",
+          "addressLocality": "Aix-en-Provence",
+          "addressCountry": "FR"
+        },
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.8",
+          "reviewCount": "25",
+          "bestRating": "5"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "Services",
+            "value": "Repas sur place, vente à emporter, livraison sans contact"
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
