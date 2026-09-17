@@ -206,10 +206,23 @@ export function Reviews() {
                   aria-current={index === i ? "true" : undefined}
                   aria-label={`Afficher l'avis de ${r.name}`}
                   onClick={() => setIndex(i)}
-                  className={`relative h-3 overflow-hidden rounded-full transition-all duration-300 ${
-                    index === i ? "w-8 bg-ink/10" : "w-3 bg-ink/20 hover:bg-ink/40"
+                  className={`group relative h-3 overflow-visible rounded-full transition-all duration-300 ${
+                    index === i ? "w-8" : "w-3"
                   }`}
                 >
+                  {/* Pastille visuelle 12 px (le bouton lui-même reste fin), + zone
+                      tactile étendue à 44 px sans décaler la mise en page (WCAG
+                      2.5.8 : les dots de 12 px étaient bien trop petits au doigt). */}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-0 rounded-full transition-colors duration-300 ${
+                      index === i ? "bg-ink/10" : "bg-ink/20 group-hover:bg-ink/40"
+                    }`}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-1/2 top-1/2 -z-10 h-11 w-11 -translate-x-1/2 -translate-y-1/2"
+                  />
                   {/* Remplissage progressif = temps restant avant la slide suivante.
                       La key inclut `index` et `paused` : le timer JS repart de 7 s
                       après un changement de slide ou une pause/reprise, la barre

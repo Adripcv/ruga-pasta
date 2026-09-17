@@ -40,7 +40,7 @@ export function Footer() {
               <p>
                 <a
                   href={restaurant.phoneHref}
-                  className="transition-colors hover:text-sun"
+                  className="inline-block py-1.5 transition-colors hover:text-sun"
                 >
                   {restaurant.phoneDisplay}
                 </a>
@@ -61,7 +61,7 @@ export function Footer() {
                 <li key={link.href}>
                   <a
                     href={link.href}
-                    className="text-sm font-semibold text-cream/80 transition-colors hover:text-tomato"
+                    className="inline-block py-1.5 text-sm font-semibold text-cream/80 transition-colors hover:text-tomato"
                   >
                     {link.label}
                   </a>
