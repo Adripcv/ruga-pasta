@@ -1,4 +1,4 @@
-import { about, restaurant } from "../data/restaurant";
+import { about, orderLinkProps, restaurant } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Arrow } from "./icons";
 
@@ -26,7 +26,7 @@ export function About() {
           <div className="reveal-img overflow-hidden rounded-[2rem] shadow-[0_30px_60px_-30px_rgba(43,26,16,0.45)]">
             <img
               src="/images/about-big.webp"
-              alt="Visuel d’illustration — pâtes fraîches en préparation"
+              alt="La terrasse du Ruga Pasta : boxes de pâtes sur les tables, devant la boutique"
               className="aspect-[4/3] w-full object-cover"
               loading="lazy"
               decoding="async"
@@ -37,8 +37,8 @@ export function About() {
           <div className="reveal-img mt-4 grid grid-cols-2 gap-4">
             <div className="overflow-hidden rounded-3xl shadow-[0_20px_40px_-24px_rgba(43,26,16,0.4)]">
               <img
-                src="/images/about-small1.webp"
-                alt="Visuel d’illustration — cliente ravie autour de son repas"
+                src="/images/about-box.webp"
+                alt="Une box Ruga Pasta tenue à la main : penne, sauce crémeuse et bacon"
                 className="aspect-[3/4] w-full object-cover"
                 loading="lazy"
                 decoding="async"
@@ -48,8 +48,8 @@ export function About() {
             </div>
             <div className="overflow-hidden rounded-3xl shadow-[0_20px_40px_-24px_rgba(43,26,16,0.4)]">
               <img
-                src="/images/gal-table.webp"
-                alt="Visuel d’illustration — moment convivial autour d’une table"
+                src="/images/about-top.webp"
+                alt="Box Ruga Pasta vue du dessus : fusilli, sauce et parmesan râpé"
                 className="aspect-[3/4] w-full object-cover"
                 loading="lazy"
                 decoding="async"
@@ -105,7 +105,7 @@ export function About() {
           </ul>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a href={orderHref} className="btn-primary">
+            <a href={orderHref} {...orderLinkProps} className="btn-primary">
               Commander
               <Arrow />
             </a>

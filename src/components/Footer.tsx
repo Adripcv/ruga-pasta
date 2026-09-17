@@ -1,4 +1,4 @@
-import { restaurant } from "../data/restaurant";
+import { orderLinkProps, restaurant } from "../data/restaurant";
 import { ForkLogo } from "./icons";
 
 export function Footer() {
@@ -74,6 +74,15 @@ export function Footer() {
                 <li key={service}>{service}</li>
               ))}
             </ul>
+            {restaurant.orderUrl && (
+              <a
+                href={restaurant.orderUrl}
+                {...orderLinkProps}
+                className="mt-5 inline-flex items-center gap-2 rounded-full bg-tomato px-4 py-2 text-xs font-extrabold tracking-[0.12em] text-cream uppercase transition-colors hover:bg-tomato-deep"
+              >
+                ★ Commander sur {restaurant.orderSource}
+              </a>
+            )}
           </div>
         </div>
 

@@ -7,6 +7,7 @@ export function Gallery() {
   const ref = useReveal<HTMLElement>();
   const [lightbox, setLightbox] = useState<number | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const photos = gallery.photos;
 
@@ -30,19 +31,53 @@ export function Gallery() {
     setLightbox(i);
   };
 
-  // Clavier : Échap ferme, flèches naviguent — scroll bloqué quand ouverte
+  // Clavier : Échap ferme, flèches naviguent, Tab reste dans la lightbox —
+  // scroll bloqué quand elle est ouverte.
   useEffect(() => {
     if (lightbox === null) return;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeBtnRef.current?.focus();
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
+
+      if (e.key === "Tab") {
+        // Piège à focus : sans ça, Tab sortait de la lightbox et promenait le
+        // focus sur les liens de la page cachés derrière l'overlay (WCAG 2.4.3).
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        const focusables = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+
+        if (!active || !dialog.contains(active)) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
+
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKey);
     };
   }, [lightbox !== null, close, step]);
@@ -114,6 +149,7 @@ export function Gallery() {
       {/* ---------- Lightbox ---------- */}
       {current && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label={current.alt}

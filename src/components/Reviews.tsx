@@ -132,6 +132,10 @@ export function Reviews() {
           className="reveal mt-12"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
+          // Le survol ne suffit pas : le défilement automatique doit aussi
+          // s'arrêter au clavier (WCAG 2.2.2 — contenu en mouvement).
+          onFocus={() => setPaused(true)}
+          onBlur={() => setPaused(false)}
           onTouchStart={(e) => {
             touchX.current = e.touches[0].clientX;
             setPaused(true);
@@ -149,17 +153,21 @@ export function Reviews() {
             className="overflow-hidden rounded-[2rem]"
             role="region"
             aria-roledescription="carousel"
-            aria-label="Témoignages clients"
+            aria-label={`Témoignages clients — ${total} avis`}
           >
             <div
               className="flex transition-transform duration-500 ease-out"
               style={{ transform: `translateX(-${index * 100}%)` }}
             >
-              {reviews.list.map((review) => (
+              {reviews.list.map((review, i) => (
                 <figure
                   key={review.name}
                   className="w-full shrink-0 rounded-[2rem] border border-ink/10 bg-white p-7 shadow-[0_22px_50px_-30px_rgba(43,26,16,0.4)] sm:p-10"
-                  aria-hidden="false"
+                  // Les avis hors écran ne doivent être ni lus par un lecteur
+                  // d'écran ni atteignables au clavier (`inert` les retire du
+                  // focus) : sinon on entendait les 3 avis d'affilée.
+                  aria-hidden={index !== i}
+                  inert={index !== i}
                 >
                   <Quote className="h-9 w-9 text-tomato/25" />
                   <blockquote className="mt-4 text-lg leading-relaxed text-ink/85 sm:text-xl">
@@ -188,14 +196,15 @@ export function Reviews() {
 
           {/* Contrôles */}
           <div className="mt-6 flex items-center justify-between">
-            <div className="flex gap-2" role="tablist" aria-label="Choisir un avis">
+            {/* De vrais boutons, pas un faux `tablist` : les onglets ARIA sans
+                panneau associé sont invalides et annonçaient « 1 sur 3 » à tort. */}
+            <div className="flex gap-2" role="group" aria-label="Choisir un avis">
               {reviews.list.map((r, i) => (
                 <button
                   key={r.name}
                   type="button"
-                  role="tab"
-                  aria-selected={index === i}
-                  aria-label={`Avis de ${r.name}`}
+                  aria-current={index === i ? "true" : undefined}
+                  aria-label={`Afficher l'avis de ${r.name}`}
                   onClick={() => setIndex(i)}
                   className={`relative h-3 overflow-hidden rounded-full transition-all duration-300 ${
                     index === i ? "w-8 bg-ink/10" : "w-3 bg-ink/20 hover:bg-ink/40"

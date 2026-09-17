@@ -9,34 +9,72 @@
       content="Découvrez Ruga Pasta à Aix-en-Provence : pâtes gourmandes, restauration rapide italienne, sur place, à emporter et en livraison."
     />
     <meta name="theme-color" content="#C93227" />
+    <meta name="color-scheme" content="light" />
     <meta name="geo.region" content="FR-13" />
     <meta name="geo.placename" content="Aix-en-Provence" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
 
-    <!-- Open Graph -->
+    <!--
+      ⚠️ `%SITE_URL%` est remplacé au build par le domaine configuré
+      (voir `SITE_URL` dans le README). Les balises ci-dessous DOIVENT être
+      absolues : un chemin relatif est ignoré par les moteurs de recherche
+      (canonical) et casse les aperçus de partage (WhatsApp, Facebook, X).
+    -->
+    <link rel="canonical" href="%SITE_URL%/" />
+
+    <!-- Open Graph / réseaux sociaux -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Ruga Pasta" />
+    <meta property="og:url" content="%SITE_URL%/" />
     <meta property="og:title" content="Ruga Pasta — Pasta & cuisine italienne à Aix-en-Provence" />
     <meta
       property="og:description"
       content="Découvrez Ruga Pasta à Aix-en-Provence : pâtes gourmandes, restauration rapide italienne, sur place, à emporter et en livraison."
     />
-    <meta property="og:image" content="/images/hero.webp" />
+    <meta property="og:image" content="%SITE_URL%/images/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="La devanture de Ruga Pasta, auvent rouge, à Aix-en-Provence"
+    />
     <meta property="og:locale" content="fr_FR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="%SITE_URL%/images/og-image.jpg" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preload" as="image" href="/images/hero.webp" fetchpriority="high" />
+    <link
+      rel="preload"
+      as="image"
+      href="/images/hero.webp"
+      type="image/webp"
+      fetchpriority="high"
+    />
 
-    <!-- Données structurées Schema.org -->
+    <!--
+      Données structurées Schema.org.
+      `type="application/ld+json"` (et non `text/javascript`) : ce bloc est un
+      pur FORMAT D'ÉCHANGE pour les moteurs — les navigateurs ne l'exécutent
+      JAMAIS, il est donc exempt de la CSP `script-src 'self'` (sans cela, un
+      hachage recalculé à chaque build serait nécessaire).
+    -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": ["Restaurant", "FoodEstablishment"],
+        "@type": "Restaurant",
+        "@id": "%SITE_URL%/#restaurant",
         "name": "Ruga Pasta",
+        "url": "%SITE_URL%/",
         "description": "Pasta bar italien à Aix-en-Provence : pâtes gourmandes à savourer sur place, à emporter ou en livraison sans contact.",
         "telephone": "+33 4 42 23 37 08",
         "priceRange": "1–10 €",
         "servesCuisine": ["Italienne", "Pâtes"],
-        "hasMenu": "/images/carte-ruga-pasta.png",
+        "image": [
+          "%SITE_URL%/images/og-image.jpg",
+          "%SITE_URL%/images/gal-devanture.webp"
+        ],
+        "hasMenu": "%SITE_URL%/images/carte-ruga-pasta.png",
         "openingHoursSpecification": [
           {
             "@type": "OpeningHoursSpecification",
@@ -50,12 +88,6 @@
             ],
             "opens": "11:00",
             "closes": "21:00"
-          },
-          {
-            "@type": "OpeningHoursSpecification",
-            "dayOfWeek": "Sunday",
-            "opens": "00:00",
-            "closes": "00:00"
           }
         ],
         "address": {
@@ -71,11 +103,37 @@
           "reviewCount": "25",
           "bestRating": "5"
         },
+        "potentialAction": {
+          "@type": "OrderAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://www.ubereats.com/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw",
+            "inLanguage": "fr",
+            "actionPlatform": [
+              "http://schema.org/DesktopWebPlatform",
+              "http://schema.org/MobileWebPlatform"
+            ]
+          },
+          "deliveryMethod": [
+            "http://purl.org/goodrelations/v1#DeliveryModePickUp",
+            "http://purl.org/goodrelations/v1#DeliveryModeOwnFleet"
+          ]
+        },
         "additionalProperty": [
           {
             "@type": "PropertyValue",
             "name": "Services",
             "value": "Repas sur place, vente à emporter, livraison sans contact"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "Viande Halal certifiée",
+            "value": "true"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "Commande en ligne",
+            "value": "Uber Eats — retrait en boutique ou livraison"
           }
         ]
       }
@@ -83,6 +141,50 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <!--
+      Repli sans JavaScript : le site est une application React, donc sans JS
+      l'écran resterait vide. On affiche ici l'essentiel (adresse, téléphone,
+      horaires) — utile pour les visiteurs, et pour les robots qui n'exécutent
+      pas les scripts. Un navigateur avec JavaScript n'affiche JAMAIS ce bloc :
+      il ne concerne que les visiteurs et les robots sans JS.
+    -->
+    <noscript>
+      <div
+        style="max-width:38rem;margin:2rem auto;padding:1.5rem;border:2px solid #2b1a10;border-radius:1.5rem;font-family:Georgia,serif;color:#2b1a10;background:#faf3e7;line-height:1.6"
+      >
+        <h1 style="margin:0 0 0.25rem;font-size:1.75rem">Ruga Pasta</h1>
+        <p style="margin:0 0 1rem;font-style:italic;color:#c93227">
+          La pasta, fatta bene. — Pasta bar à Aix-en-Provence
+        </p>
+        <p style="margin:0 0 0.75rem">
+          <strong>Adresse :</strong> 7 Rue Rifle Rafle, 13100 Aix-en-Provence<br />
+          <strong>Téléphone :</strong>
+          <a href="tel:+33442233708" style="color:#c93227">04 42 23 37 08</a><br />
+          <strong>Horaires :</strong> du lundi au samedi, 11:00 – 21:00
+          (fermé le dimanche)<br />
+          <strong>Services :</strong> sur place, à emporter, livraison<br />
+          <strong>Prix :</strong> 1–10 € par personne · Boxes dès 6,50 €
+        </p>
+        <p style="margin:0">
+          <a
+            href="https://www.google.com/maps/search/?api=1&query=Ruga+Pasta%2C+7+Rue+Rifle+Rafle%2C+13100+Aix-en-Provence"
+            style="color:#c93227"
+            >Voir l'itinéraire sur Google Maps</a
+          ><br />
+          <a
+            href="https://www.ubereats.com/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw"
+            style="color:#c93227"
+            >Commander en ligne sur Uber Eats</a
+          > (retrait en boutique ou livraison)
+        </p>
+        <p style="margin:1rem 0 0;font-size:0.85rem;color:#5b4636">
+          La version complète du site (carte détaillée, photos, avis) nécessite
+          JavaScript.
+        </p>
+      </div>
+    </noscript>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

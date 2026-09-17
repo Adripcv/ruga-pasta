@@ -1,4 +1,4 @@
-import { restaurant } from "../data/restaurant";
+import { orderLinkProps, restaurant } from "../data/restaurant";
 import { Phone, Pin, Star } from "./icons";
 
 /**
@@ -16,6 +16,7 @@ export function MobileBar() {
       <div className="grid grid-cols-3 divide-x divide-ink/10">
         <a
           href={orderHref}
+          {...orderLinkProps}
           className="flex flex-col items-center gap-0.5 bg-tomato py-2.5 text-[11px] font-extrabold tracking-wider text-cream uppercase active:bg-tomato-deep"
           {...(restaurant.orderUrl
             ? {}

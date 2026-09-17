@@ -1,4 +1,4 @@
-import { menu, restaurant } from "../data/restaurant";
+import { menu, orderLinkProps, restaurant } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Arrow } from "./icons";
 
@@ -250,6 +250,31 @@ export function MenuSection() {
           {menu.note}
         </p>
 
+        {/* Photos produit officielles (source : page Uber Eats du restaurant) */}
+        <div className="reveal mt-10 grid gap-4 sm:grid-cols-2">
+          {menu.boxPhotos.map((photo) => (
+            <figure
+              key={photo.img}
+              className="group overflow-hidden rounded-3xl border border-ink/10 bg-white shadow-[0_16px_40px_-26px_rgba(43,26,16,0.4)]"
+            >
+              <img
+                src={photo.img}
+                alt={photo.alt}
+                loading="lazy"
+                decoding="async"
+                className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                width="550"
+                height="413"
+              />
+            </figure>
+          ))}
+        </div>
+
+        {/* Halal, prix et commande */}
+        <p className="reveal mt-6 text-center text-sm text-ink/55">
+          🥩 Viande Halal certifiée · Paiement par titres-restaurant acceptés
+        </p>
+
         {/* CTA */}
         <div className="reveal mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a
@@ -261,8 +286,15 @@ export function MenuSection() {
             {menu.fullMenuLabel}
             <Arrow />
           </a>
-          <a href={orderHref} className="btn-primary w-full sm:w-auto">
-            Commander
+          <a
+            href={orderHref}
+            {...orderLinkProps}
+            className="btn-primary w-full sm:w-auto"
+            {...(restaurant.orderUrl
+              ? {}
+              : { "aria-label": "Commander par téléphone au 04 42 23 37 08" })}
+          >
+            Commander{restaurant.orderSource ? ` sur ${restaurant.orderSource}` : ""}
             <Arrow />
           </a>
         </div>

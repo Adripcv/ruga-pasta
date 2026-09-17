@@ -7,3 +7,9 @@ dist-ssr
 npm-debug.log*
 .freebuff/
 vite-dev.log
+
+# Variables d'environnement : ne jamais committer de secret.
+# `.env.example` est conservé comme modèle (sans valeurs sensibles).
+.env
+.env.*
+!.env.example

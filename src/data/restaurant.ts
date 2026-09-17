@@ -33,12 +33,20 @@ export const restaurant = {
   services: ["Repas sur place", "Vente à emporter", "Livraison sans contact"],
 
   /**
-   * 🔗 Lien de commande en ligne (Click & Collect, Uber Eats, Just Eat…).
-   * `null` tant que le restaurant n'a pas fourni son lien officiel :
-   * les boutons « Commander » renvoient alors vers l'appel téléphonique.
-   * Ex. : orderUrl: "https://mon-lien-de-commande.fr/ruga-pasta"
+   * 🔗 Commande en ligne — page Uber Eats officielle de Ruga Pasta
+   * (retrait en boutique ou livraison à domicile).
+   * Tous les boutons « Commander » du site pointent vers cette URL ;
+   * remettre `null` pour revenir au comportement « appel téléphonique ».
    */
-  orderUrl: null as string | null,
+  orderUrl:
+    "https://www.ubereats.com/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw" as string | null,
+
+  /** Nom de la plateforme de commande, affiché sur les boutons. */
+  orderSource: "Uber Eats",
+
+  /** Précision affichée sous les boutons de commande. */
+  orderNote:
+    "Retrait en boutique ou livraison à domicile via Uber Eats. Les prix plateforme sont légèrement plus élevés qu'en boutique.",
 
   /**
    * 🕐 Horaires d'ouverture — source : fiche Google de Ruga Pasta.
@@ -56,9 +64,28 @@ export const restaurant = {
     dimanche: "Fermé",
   } as Record<string, string> | null,
 
+  /**
+   * 🕒 Fuseau du restaurant.
+   * Indispensable : les horaires affichés sont ceux d'Aix-en-Provence, donc le
+   * badge « Ouvert / Fermé » doit être calculé à l'heure de la devanture, pas à
+   * celle de l'appareil du visiteur (un client à New York ou à Dubaï doit voir
+   * le même état que le restaurateur).
+   */
+  timeZone: "Europe/Paris",
+
   /** 🔗 Réseaux sociaux — aucun compte officiel connu : ne pas inventer. */
   social: [] as { label: string; url: string }[],
 } as const;
+
+/**
+ * Props à étaler sur chaque lien « Commander » : quand la commande passe par
+ * un site externe (Uber Eats), on ouvre dans un nouvel onglet avec `noopener` ;
+ * pour un simple `tel:`, on n'ajoute rien.
+ */
+export const orderLinkProps: { target?: string; rel?: string } =
+  restaurant.orderUrl
+    ? { target: "_blank", rel: "noopener noreferrer" }
+    : {};
 
 /**
  * 🕐 État d'ouverture calculé à la volée depuis `restaurant.hours`.
@@ -87,6 +114,59 @@ const DAY_NAMES = [
   "samedi",
 ];
 
+/** Abréviations renvoyées par `Intl` en français, dans l'ordre de `DAY_NAMES`. */
+const DAY_ABBR = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+
+type LocalTime = { dayIndex: number; minutes: number };
+
+/**
+ * Heure « murale » du restaurant (fuseau `restaurant.timeZone`), indépendante
+ * du fuseau de l'appareil. Repose sur `Intl` (natif partout) ; en cas d'échec
+ * on retombe sur l'heure locale de l'appareil pour ne jamais casser le badge.
+ */
+function restaurantNow(now: Date): LocalTime {
+  const fallback = {
+    dayIndex: now.getDay(),
+    minutes: now.getHours() * 60 + now.getMinutes(),
+  };
+
+  try {
+    const parts = new Intl.DateTimeFormat("fr-FR", {
+      timeZone: restaurant.timeZone,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const value = (type: string) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+
+    const dayIndex = DAY_ABBR.indexOf(value("weekday").slice(0, 3).toLowerCase());
+    const hour = value("hour");
+    const minute = value("minute");
+    if (dayIndex < 0 || !/^\d{1,2}$/.test(hour) || !/^\d{1,2}$/.test(minute)) {
+      return fallback;
+    }
+    // `hour12: false` peut renvoyer « 24 » à minuit selon la plateforme.
+    return { dayIndex, minutes: (Number(hour) % 24) * 60 + Number(minute) };
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * `true` si l'horloge de l'appareil est à l'heure du restaurant.
+ * Sinon le badge reste juste, mais on précise « heure d'Aix-en-Provence »
+ * pour éviter la confusion avec les horaires locaux du visiteur.
+ */
+export function isRestaurantLocalTime(now: Date = new Date()): boolean {
+  const local = restaurantNow(now);
+  return (
+    local.dayIndex === now.getDay() &&
+    local.minutes === now.getHours() * 60 + now.getMinutes()
+  );
+}
+
 function formatTime(totalMinutes: number): string {
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
@@ -108,10 +188,9 @@ export function getOpenStatus(now: Date = new Date()): OpenStatus | null {
   const hours = restaurant.hours;
   if (!hours) return null;
 
-  const todayIndex = now.getDay();
+  const { dayIndex: todayIndex, minutes: minutesNow } = restaurantNow(now);
   const today = DAY_NAMES[todayIndex];
   const todayHours = hours[today] ?? "Fermé";
-  const minutesNow = now.getHours() * 60 + now.getMinutes();
   const range = parseRange(todayHours);
 
   if (range && minutesNow >= range.open && minutesNow < range.close) {
@@ -209,6 +288,21 @@ export const menu = {
   fullMenuImage: "/images/carte-ruga-pasta.png",
   fullMenuLabel: "Voir la carte officielle",
 
+  /**
+   * 📷 Photos produit officielles — source : page Uber Eats du restaurant.
+   * (Ce sont les seules photos de plats fournies par le restaurant.)
+   */
+  boxPhotos: [
+    {
+      img: "/images/box-carbonara.webp",
+      alt: "Box de pâtes carbonara Ruga Pasta ouverte, tenue en main gantée",
+    },
+    {
+      img: "/images/boxes-boutique.webp",
+      alt: "Pyramide de boxes Ruga Pasta dans la boutique, mascotte peinte au mur",
+    },
+  ],
+
   formules: [
     {
       name: "Formule Classique",
@@ -287,7 +381,7 @@ export const menu = {
   ] as { name: string; price: string; note?: string }[]),
 
   note:
-    "Prix TTC indicatifs — la carte évolue chaque semaine avec la salade du moment.",
+    "Prix boutique TTC indicatifs — sur Uber Eats, les prix sont légèrement plus élevés qu'en boutique.",
 } as const;
 
 export const concept = {
@@ -322,43 +416,25 @@ export const gallery = {
   kicker: "04 · En images",
   title: "UN PEU D’ITALIE",
   titleAccent: "À AIX.",
-  note: "Visuels d’ambiance (illustrations) — l’assiette du jour se déguste sur place.",
+  note: "Nos photos — la devanture rue Rifle Rafle, la terrasse et nos boxes à emporter.",
   photos: [
     {
-      img: "/images/pasta2.webp",
-      alt: "Visuel d’illustration — grande assiette de pâtes en sauce",
-      span: "lg:col-span-7 lg:row-span-2",
+      img: "/images/gal-box.webp",
+      alt: "Une box de pâtes Ruga Pasta dégustée sur la terrasse, rue Rifle Rafle",
+      span: "col-span-2 lg:col-span-7 lg:row-span-2",
       ratio: "aspect-[4/3] lg:aspect-auto lg:h-full",
     },
     {
-      img: "/images/gal-resto1.webp",
-      alt: "Visuel d’illustration — salle de restaurant chaleureuse",
+      img: "/images/gal-devanture.webp",
+      alt: "L’auvent rouge et la façade du Ruga Pasta à Aix-en-Provence",
       span: "lg:col-span-5",
       ratio: "aspect-[4/3]",
     },
     {
-      img: "/images/gal-chef.webp",
-      alt: "Visuel d’illustration — préparation en cuisine",
+      img: "/images/gal-terrasse.webp",
+      alt: "Les boxes Ruga Pasta posées sur les tables en bois de la terrasse",
       span: "lg:col-span-5",
       ratio: "aspect-[4/3]",
-    },
-    {
-      img: "/images/dessert1.webp",
-      alt: "Visuel d’illustration — dessert gourmand",
-      span: "lg:col-span-4",
-      ratio: "aspect-square",
-    },
-    {
-      img: "/images/gal-ingredients.webp",
-      alt: "Visuel d’illustration — ingrédients frais d’inspiration italienne",
-      span: "lg:col-span-4",
-      ratio: "aspect-square",
-    },
-    {
-      img: "/images/gal-resto2.webp",
-      alt: "Visuel d’illustration — table dressée dans le restaurant",
-      span: "lg:col-span-4",
-      ratio: "aspect-square",
     },
   ],
 } as const;

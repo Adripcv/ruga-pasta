@@ -16,6 +16,9 @@
 
 html {
   scroll-behavior: smooth;
+  /* Ancres : sans ça, « #carte » arrivait SOUS la barre de navigation fixe
+     (64 px en mobile, 72 px au-delà) qui recouvrait le titre de section. */
+  scroll-padding-top: calc(80px + env(safe-area-inset-top, 0px));
 }
 
 body {

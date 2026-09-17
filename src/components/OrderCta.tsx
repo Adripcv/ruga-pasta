@@ -1,6 +1,6 @@
-import { orderCta, restaurant } from "../data/restaurant";
+import { orderCta, orderLinkProps, restaurant } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
-import { Phone } from "./icons";
+import { Phone, Star } from "./icons";
 
 export function OrderCta() {
   const ref = useReveal<HTMLElement>();
@@ -38,18 +38,38 @@ export function OrderCta() {
           {orderCta.text}
         </p>
 
-        <div className="reveal mt-9">
+        <div className="reveal mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a
             href={orderHref}
+            {...orderLinkProps}
             className="inline-flex items-center justify-center gap-3 rounded-full bg-cream px-10 py-5 text-base font-black tracking-[0.14em] text-tomato uppercase shadow-[0_18px_40px_-12px_rgba(0,0,0,0.45)] transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-[0_24px_50px_-12px_rgba(0,0,0,0.5)] sm:text-lg"
             {...(restaurant.orderUrl
               ? {}
               : { "aria-label": "Commander maintenant par téléphone au 04 42 23 37 08" })}
           >
-            <Phone className="h-5 w-5" />
-            Commander maintenant
+            {restaurant.orderUrl ? (
+              <Star className="h-5 w-5" />
+            ) : (
+              <Phone className="h-5 w-5" />
+            )}
+            Commander{restaurant.orderSource ? ` sur ${restaurant.orderSource}` : " maintenant"}
           </a>
+          {restaurant.orderUrl && (
+            <a
+              href={restaurant.phoneHref}
+              className="inline-flex items-center gap-2 rounded-full border-2 border-cream/40 px-6 py-4 text-sm font-bold tracking-[0.1em] text-cream uppercase transition-colors hover:border-cream hover:bg-cream/10"
+            >
+              <Phone className="h-4 w-4" />
+              {restaurant.phoneDisplay}
+            </a>
+          )}
         </div>
+
+        {restaurant.orderUrl && (
+          <p className="reveal mt-5 text-sm text-cream/75">
+            {restaurant.orderNote}
+          </p>
+        )}
 
         <div className="reveal mt-8 flex flex-wrap justify-center gap-2.5">
           {restaurant.services.map((service) => (
@@ -64,7 +84,7 @@ export function OrderCta() {
 
         <p className="reveal mt-6 text-sm text-cream/75">
           {restaurant.orderUrl
-            ? "Commande en ligne officielle."
+            ? "Commande en ligne officielle — paiement par titres-restaurant accepté."
             : "En attendant la commande en ligne : un appel suffit !"}
         </p>
       </div>

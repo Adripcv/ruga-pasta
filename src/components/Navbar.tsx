@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { nav, restaurant } from "../data/restaurant";
+import { useEffect, useRef, useState } from "react";
+import { nav, orderLinkProps, restaurant } from "../data/restaurant";
 import { useScrollSpy } from "../hooks/useScrollSpy";
 import { ForkLogo, Burger } from "./icons";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const active = useScrollSpy(nav.map((item) => item.href.slice(1)));
 
   useEffect(() => {
@@ -15,12 +16,42 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Ferme le menu au resize desktop + bloque le scroll mobile ouvert
+  // Bloque le défilement de la page tant que le menu mobile est ouvert.
+  // On mémorise la valeur précédente : la lightbox de la galerie verrouille
+  // aussi le scroll, et refermer le menu ne doit pas le déverrouiller à tort.
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previous;
     };
+  }, [open]);
+
+  // ⚠️ Le panneau du menu est en `lg:hidden` : ouvert en mobile puis passé en
+  // desktop (rotation d'iPad, fenêtre agrandie, DevTools), il devenait
+  // invisible alors que le scroll de la page restait bloqué, sans aucun
+  // moyen de s'en sortir autrement qu'en rechargeant. On le referme.
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      if (wide.matches) setOpen(false);
+    };
+    wide.addEventListener("change", onChange);
+    return () => wide.removeEventListener("change", onChange);
+  }, []);
+
+  // Échap referme le menu et rend le focus au bouton qui l'a ouvert.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        toggleRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   const orderHref = restaurant.orderUrl ?? restaurant.phoneHref;
@@ -86,12 +117,14 @@ export function Navbar() {
         <div className="flex items-center gap-2">
           <a
             href={orderHref}
+            {...orderLinkProps}
             className="btn-primary btn-sm hidden sm:inline-flex"
             {...(restaurant.orderUrl ? {} : { "aria-label": "Commander par téléphone au 04 42 23 37 08" })}
           >
             Commander
           </a>
           <button
+            ref={toggleRef}
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
@@ -134,9 +167,10 @@ export function Navbar() {
               <a
                 href={orderHref}
                 onClick={() => setOpen(false)}
+                {...orderLinkProps}
                 className="btn-primary w-full"
               >
-                Commander
+                Commander{restaurant.orderSource ? ` sur ${restaurant.orderSource}` : ""}
               </a>
             </li>
           </ul>

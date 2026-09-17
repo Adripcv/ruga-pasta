@@ -1,12 +1,37 @@
-import { useState } from "react";
-import { getOpenStatus, location, restaurant } from "../data/restaurant";
+import { useEffect, useState } from "react";
+import {
+  getOpenStatus,
+  isRestaurantLocalTime,
+  location,
+  restaurant,
+} from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Clock, Phone, Pin, Route, Tag } from "./icons";
 
 export function Location() {
   const ref = useReveal<HTMLElement>();
-  // Calculé une fois au montage : l'état « Ouvert / Fermé » du visiteur.
-  const [status] = useState(() => getOpenStatus());
+  const [status, setStatus] = useState(() => getOpenStatus());
+  const [restaurantTime, setRestaurantTime] = useState(() =>
+    isRestaurantLocalTime(),
+  );
+  // La carte Google n'est chargée qu'après un clic (voir plus bas).
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Le badge doit rester juste : on le recalcule chaque minute, et dès que
+  // l'onglet redevient visible — sinon un onglet laissé ouvert annoncerait
+  // encore « Ouvert · jusqu'à 21:00 » à 23 h.
+  useEffect(() => {
+    const refresh = () => {
+      setStatus(getOpenStatus());
+      setRestaurantTime(isRestaurantLocalTime());
+    };
+    const id = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   return (
     <section
@@ -36,17 +61,52 @@ export function Location() {
         </div>
 
         <div className="mt-12 grid gap-8 lg:grid-cols-12">
-          {/* Carte Google Maps */}
+          {/* Carte Google Maps — affichée seulement après un clic du visiteur.
+              Un iframe Google chargé d'office transmet l'IP du visiteur (et ses
+              cookies) à Google avant tout consentement : la CNIL considère ce
+              transfert comme problématique. Ici, aucune requête tierce tant que
+              le visiteur n'a pas demandé la carte. */}
           <div className="reveal-img lg:col-span-7">
-            <div className="overflow-hidden rounded-[2rem] border border-ink/10 shadow-[0_26px_60px_-34px_rgba(43,26,16,0.5)]">
-              <iframe
-                src={location.mapEmbed}
-                title="Carte — Ruga Pasta, 7 Rue Rifle Rafle, Aix-en-Provence"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="h-[320px] w-full border-0 sm:h-[440px] lg:h-full lg:min-h-[460px]"
-                allowFullScreen
-              />
+            <div className="relative overflow-hidden rounded-[2rem] border border-ink/10 shadow-[0_26px_60px_-34px_rgba(43,26,16,0.5)]">
+              {mapLoaded ? (
+                <iframe
+                  src={location.mapEmbed}
+                  title="Carte — Ruga Pasta, 7 Rue Rifle Rafle, Aix-en-Provence"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-[320px] w-full border-0 sm:h-[440px] lg:h-full lg:min-h-[460px]"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="paper flex h-[320px] w-full flex-col items-center justify-center gap-4 bg-cream-2 px-6 text-center sm:h-[440px] lg:h-full lg:min-h-[460px]">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tomato/10 text-tomato"
+                  >
+                    <Pin className="h-7 w-7" />
+                  </span>
+                  <p className="font-display text-xl font-black">
+                    Où nous trouver ?
+                  </p>
+                  <p className="max-w-xs text-sm leading-relaxed text-ink/70">
+                    {restaurant.address.street}
+                    <br />
+                    {restaurant.address.zip} {restaurant.address.city}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMapLoaded(true)}
+                    className="btn-primary"
+                  >
+                    <Route className="h-4 w-4" />
+                    Afficher la carte Google
+                  </button>
+                  <p className="max-w-xs text-[11px] leading-relaxed text-ink/50">
+                    La carte est fournie par Google et n'est chargée qu'à votre
+                    demande (aucun cookie Google avant).
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -112,6 +172,11 @@ export function Location() {
                     <>
                       <p className="mt-1.5 text-sm font-semibold text-ink/60">
                         {status.detail}
+                        {!restaurantTime && (
+                          <span className="block text-xs font-medium text-ink/50">
+                            heure d'Aix-en-Provence
+                          </span>
+                        )}
                       </p>
                       <ul className="mt-3 space-y-0.5 text-ink/75">
                         {Object.entries(restaurant.hours ?? {}).map(([day, h]) => {
@@ -200,7 +265,8 @@ export function Location() {
               </div>
 
               <p className="mt-6 text-xs leading-relaxed text-ink/50">
-                Restaurant non contractuel — photo d’illustration possible.
+                Site vitrine non contractuel : tarifs, carte et horaires
+                indicatifs, susceptibles d'évoluer. Photos prises sur place.
               </p>
             </div>
           </div>
