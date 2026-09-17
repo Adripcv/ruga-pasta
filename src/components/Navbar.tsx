@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { nav, orderLinkProps, restaurant } from "../data/restaurant";
+import { nav, orderLink, restaurant } from "../data/restaurant";
 import { useScrollSpy } from "../hooks/useScrollSpy";
-import { ForkLogo, Burger } from "./icons";
+import { Burger } from "./icons";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -54,8 +54,6 @@ export function Navbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const orderHref = restaurant.orderUrl ?? restaurant.phoneHref;
-
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
@@ -75,7 +73,14 @@ export function Navbar() {
           }`}
           aria-label="Ruga Pasta — retour à l’accueil"
         >
-          <ForkLogo className="h-8 w-8 shrink-0" />
+          {/* Vrai logo (emblème sans texte — le nom est à côté) */}
+          <img
+            src="/images/logo-emblem.png"
+            alt=""
+            width="202"
+            height="152"
+            className="h-9 w-auto shrink-0"
+          />
           <span className="h-serif text-lg font-black leading-none tracking-tight sm:text-xl">
             RUGA&nbsp;PASTA
           </span>
@@ -116,8 +121,7 @@ export function Navbar() {
 
         <div className="flex items-center gap-2">
           <a
-            href={orderHref}
-            {...orderLinkProps}
+            {...orderLink()}
             className="btn-primary btn-sm hidden sm:inline-flex"
             {...(restaurant.orderUrl ? {} : { "aria-label": "Commander par téléphone au 04 42 23 37 08" })}
           >
@@ -165,9 +169,8 @@ export function Navbar() {
             ))}
             <li className="pt-2">
               <a
-                href={orderHref}
+                {...orderLink()}
                 onClick={() => setOpen(false)}
-                {...orderLinkProps}
                 className="btn-primary w-full"
               >
                 Commander{restaurant.orderSource ? ` sur ${restaurant.orderSource}` : ""}

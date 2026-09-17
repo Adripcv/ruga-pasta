@@ -1,4 +1,4 @@
-import { menu, orderLinkProps, restaurant } from "../data/restaurant";
+import { menu, orderLink, restaurant } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Arrow } from "./icons";
 
@@ -32,7 +32,6 @@ function PriceBadge({
 
 export function MenuSection() {
   const ref = useReveal<HTMLElement>();
-  const orderHref = restaurant.orderUrl ?? restaurant.phoneHref;
 
   return (
     <section
@@ -287,8 +286,7 @@ export function MenuSection() {
             <Arrow />
           </a>
           <a
-            href={orderHref}
-            {...orderLinkProps}
+            {...orderLink()}
             className="btn-primary w-full sm:w-auto"
             {...(restaurant.orderUrl
               ? {}

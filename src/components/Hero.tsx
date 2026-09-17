@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { hero, orderLinkProps, restaurant } from "../data/restaurant";
+import { hero, orderLink, restaurant } from "../data/restaurant";
 import { prefersReducedMotion } from "../hooks/useReveal";
 import { Pin, Star } from "./icons";
 
@@ -7,7 +7,6 @@ import { Pin, Star } from "./icons";
 const STAGGER = [0, 90, 160, 260, 360, 440] as const;
 
 export function Hero() {
-  const orderHref = restaurant.orderUrl ?? restaurant.phoneHref;
   const imgWrapRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -118,8 +117,7 @@ export function Hero() {
           style={{ "--d": `${STAGGER[3]}ms` } as React.CSSProperties}
         >
           <a
-            href={orderHref}
-            {...orderLinkProps}
+            {...orderLink()}
             className="btn-primary text-base sm:text-sm"
           >
             Commander

@@ -78,14 +78,41 @@ export const restaurant = {
 } as const;
 
 /**
- * Props à étaler sur chaque lien « Commander » : quand la commande passe par
- * un site externe (Uber Eats), on ouvre dans un nouvel onglet avec `noopener` ;
- * pour un simple `tel:`, on n'ajoute rien.
+ * 📱 Ouverture de l'application Uber Eats sur téléphone.
+ *
+ * L'app Android (`com.ubercab.eats`) est déclarée comme App Link vérifié sur
+ * ubereats.com : un simple lien web ouvre déjà l'app sur iPhone (universal
+ * link) et sur Android récent. L'`intent://` ci-dessous force en plus
+ * l'ouverture via le schéma explicite quand l'app est installée, avec
+ * repli automatique vers le site web sinon (`browser_fallback_url`) —
+ * utile sur les navigateurs Android qui ne vérifient pas les App Links.
+ * Sur ordinateur, ces URL n'ont pas de sens : on garde le lien web.
  */
-export const orderLinkProps: { target?: string; rel?: string } =
-  restaurant.orderUrl
-    ? { target: "_blank", rel: "noopener noreferrer" }
-    : {};
+const UBER_PATH = "/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw";
+const orderIntentUrl = restaurant.orderUrl
+  ? `intent://www.ubereats.com${UBER_PATH}#Intent;scheme=https;package=com.ubercab.eats;S.browser_fallback_url=${encodeURIComponent(
+      `https://www.ubereats.com${UBER_PATH}`,
+    )};end`
+  : null;
+
+/** Vrai sur téléphone/tablette (écran tactile + utilisateur mobile). */
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const uaMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  return uaMobile || coarse;
+}
+
+/**
+ * Lien « Commander » adapté à l'appareil : sur mobile, l'intent Android ouvre
+ * l'app Uber Eats installée (même onglet, donc pas d'onglet vide si l'app ne
+ * répond pas) ; sinon, site web dans un nouvel onglet ; sinon, téléphone.
+ */
+export function orderLink(): { href: string; target?: string; rel?: string } {
+  if (!restaurant.orderUrl) return { href: restaurant.phoneHref };
+  if (orderIntentUrl && isMobileDevice()) return { href: orderIntentUrl };
+  return { href: restaurant.orderUrl, target: "_blank", rel: "noopener noreferrer" };
+}
 
 /**
  * 🕐 État d'ouverture calculé à la volée depuis `restaurant.hours`.

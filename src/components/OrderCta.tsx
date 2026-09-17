@@ -1,10 +1,9 @@
-import { orderCta, orderLinkProps, restaurant } from "../data/restaurant";
+import { orderCta, orderLink, restaurant } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Phone, Star } from "./icons";
 
 export function OrderCta() {
   const ref = useReveal<HTMLElement>();
-  const orderHref = restaurant.orderUrl ?? restaurant.phoneHref;
 
   return (
     <section
@@ -40,8 +39,7 @@ export function OrderCta() {
 
         <div className="reveal mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a
-            href={orderHref}
-            {...orderLinkProps}
+            {...orderLink()}
             className="inline-flex items-center justify-center gap-3 rounded-full bg-cream px-10 py-5 text-base font-black tracking-[0.14em] text-tomato uppercase shadow-[0_18px_40px_-12px_rgba(0,0,0,0.45)] transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-[0_24px_50px_-12px_rgba(0,0,0,0.5)] sm:text-lg"
             {...(restaurant.orderUrl
               ? {}

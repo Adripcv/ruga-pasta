@@ -42,11 +42,12 @@ build (et ajouter le domaine dans Vercel → Settings → Domains).
 |---|---|
 | Adresse, téléphone, note Google (4,8 · 25 avis), services, fourchette de prix (1–10 €/pers.) | ✅ Réels |
 | Carte (formules, box à composer, salade de la semaine, boissons, desserts) | ✅ **Réelle** — d'après le menu officiel fourni (scan : `public/images/carte-ruga-pasta.png`) |
-| `orderUrl` | ✅ **Uber Eats** — https://www.ubereats.com/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw. Tous les boutons « Commander » pointent dessus (nouvel onglet). Remettre `null` pour revenir à l'appel téléphonique |
+| `orderUrl` | ✅ **Uber Eats** — https://www.ubereats.com/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw. Sur **téléphone**, le bouton ouvre l'application Uber Eats (`intent://` Android avec repli web ; iOS ouvre l'app via universal link). Sur ordinateur : site web, nouvel onglet. Remettre `null` pour revenir à l'appel téléphonique |
 | `hours` | ✅ **Réels** — lun.–sam. 11:00–21:00, dimanche fermé. Modifier le champ pour changer les horaires ; ils alimentent aussi le badge « Ouvert / Fermé » (`getOpenStatus`) |
 | Réseaux sociaux | Aucun compte officiel connu : `social` est vide volontairement |
 | Photos | ✅ **Réelles** — photos du restaurant (devanture, terrasse, boxes) dans `public/images/`. Origine : photos publiées sur la fiche Google Maps de Ruga Pasta. Pour en ajouter : déposer le fichier dans `public/images/` puis l'ajouter au tableau `gallery.photos` de `src/data/restaurant.ts` |
 | Photos produit (boxes) | ✅ **Réelles** — source : page Uber Eats officielle (`box-carbonara.webp`, `boxes-boutique.webp`), affichées dans la section carte |
+| Logo | ✅ **Officiel** — `logo-emblem.png` (navbar) et `logo-ruga.png` (footer), détourés du logo fourni ; `favicon.png` + `apple-touch-icon.png` dérivés |
 
 ## SEO
 

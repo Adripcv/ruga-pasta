@@ -1,10 +1,9 @@
-import { about, orderLinkProps, restaurant } from "../data/restaurant";
+import { about, orderLink } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Arrow } from "./icons";
 
 export function About() {
   const ref = useReveal<HTMLElement>();
-  const orderHref = restaurant.orderUrl ?? restaurant.phoneHref;
 
   return (
     <section
@@ -105,7 +104,7 @@ export function About() {
           </ul>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a href={orderHref} {...orderLinkProps} className="btn-primary">
+            <a {...orderLink()} className="btn-primary">
               Commander
               <Arrow />
             </a>
