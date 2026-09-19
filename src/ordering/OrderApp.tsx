@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/ordering/client";
 import {
   addToSelections,
+  buildRequiredRules,
   cartCount,
   cartTotalCents,
   euros,
@@ -360,19 +361,13 @@ export function OrderApp() {
     void loadSlots(day);
   }, [step, chosenDay, loadSlots]);
 
-  // Règle « une sauce par box » — déclarative, dérivée de l'arbre.
-  const requiredGaps = useMemo(() => {
-    const boxIds = items.filter((i) => i.path.includes("Compose ta box") && i.node.price_cents! > 0).map((i) => i.node.id);
-    const sauceIds = items.filter((i) => i.path.includes("Sauces")).map((i) => i.node.id);
-    if (boxIds.length === 0 || sauceIds.length === 0) return [];
-    return [
-      {
-        whenAnyOf: boxIds,
-        oneOf: sauceIds,
-        label: "Choisis ta sauce pour chaque box",
-      },
-    ];
-  }, [items]);
+  // Règles de complétude dérivées de l'arbre : chaque box ou formule
+  // sélectionnée doit avoir ses pâtes, sa sauce (et sa boisson/dessert pour
+  // les formules). Voir buildRequiredRules — plus de liste codée en dur.
+  const requiredGaps = useMemo(
+    () => (menuTree ? buildRequiredRules(menuTree) : []),
+    [menuTree],
+  );
 
   const gaps = useMemo(() => missingRequired(selections, requiredGaps), [selections, requiredGaps]);
 

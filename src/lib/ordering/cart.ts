@@ -88,5 +88,44 @@ export function missingRequired(
   return missing;
 }
 
+/**
+ * Groupes de choix OBLIGATOIRES quand le produit parent est sélectionné :
+ * une box (ou formule) sans pâtes/sauce n'a pas de sens, et une formule
+ * sans sa boisson/dessert inclus n'est pas complète. Les garnitures
+ * (fromage, toppings) restent facultatives — c'est l'esprit de la carte.
+ * Détection par le nom du groupe (insensible à la casse/accents légers).
+ */
+const REQUIRED_GROUP_RE = /p[aâ]tes|sauce|boisson|dessert/i;
+
+export type RequiredRule = { whenAnyOf: string[]; oneOf: string[]; label: string };
+
+/**
+ * Construit les règles de complétude depuis l'arbre du menu — une règle PAR
+ * instance de groupe (la Box S et la Box M ont chacune leurs pâtes et leur
+ * sauce ; idem pour chaque formule). Sert au blocage du bouton « Continuer ».
+ */
+export function buildRequiredRules(menuTree: MenuNode[]): RequiredRule[] {
+  const rules: RequiredRule[] = [];
+
+  const walkSections = (nodes: MenuNode[]): void => {
+    for (const section of nodes) {
+      for (const product of section.children) {
+        for (const group of product.children) {
+          if (!REQUIRED_GROUP_RE.test(group.name)) continue;
+          rules.push({
+            whenAnyOf: [product.id],
+            oneOf: group.children.map((leaf) => leaf.id),
+            label: `${group.name} pour ${product.name}`,
+          });
+        }
+      }
+      // Récursion : l'arbre peut avoir des niveaux supplémentaires.
+      walkSections(section.children);
+    }
+  };
+  walkSections(menuTree);
+  return rules;
+}
+
 const EUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
 export const euros = (cents: number) => EUR.format(cents / 100);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addToSelections,
+  buildRequiredRules,
   cartCount,
   cartTotalCents,
   flattenItems,
@@ -96,6 +97,55 @@ describe("missingRequired", () => {
     expect(missingRequired({ "box-s": 1 }, rules)).toEqual(["Choisis une sauce"]);
     expect(missingRequired({ "box-s": 1, "sauce-pesto": 1 }, rules)).toEqual([]);
     expect(missingRequired({ tiramisu: 1 }, rules)).toEqual([]); // pas de box → pas d'exigence
+  });
+});
+
+describe("buildRequiredRules", () => {
+  it("crée une règle par groupe obligatoire d'un produit sélectionnable", () => {
+    const tree: MenuNode[] = [
+      n({
+        id: "box", name: "Compose ta box", price_cents: null, children: [
+          n({ id: "box-s", name: "Box S", price_cents: 650, max_qty: 10, children: [
+            n({ id: "pates", name: "Pâtes", price_cents: null, children: [
+              n({ id: "p-fusilli", name: "Fusilli", price_cents: 0 }),
+            ] }),
+            n({ id: "sauces", name: "Sauces", price_cents: null, children: [
+              n({ id: "s-tomate", name: "Tomate", price_cents: 0 }),
+            ] }),
+            n({ id: "fromage", name: "Ton fromage", price_cents: null, children: [
+              n({ id: "f-parmesan", name: "Parmesan", price_cents: 0 }),
+            ] }),
+          ] }),
+        ],
+      }),
+    ];
+    const rules = buildRequiredRules(tree);
+    // Pâtes et sauces obligatoires ; le fromage (garniture) facultatif.
+    expect(rules).toHaveLength(2);
+    expect(rules[0].label).toBe("Pâtes pour Box S");
+    expect(rules[0].whenAnyOf).toEqual(["box-s"]);
+    expect(rules[0].oneOf).toEqual(["p-fusilli"]);
+  });
+
+  it("gère les formules (boisson + dessert obligatoires) et les box séparément", () => {
+    const tree: MenuNode[] = [
+      n({ id: "root", name: "Menu", price_cents: null, children: [
+        n({ id: "fcs", name: "Formule Classique S", price_cents: 790, max_qty: 10, children: [
+          n({ id: "fcs-choix", name: "Boisson ou dessert inclus", price_cents: null, children: [
+            n({ id: "fcs-b-eau", name: "Eau", price_cents: 0 }),
+          ] }),
+        ] }),
+        n({ id: "salade", name: "Salade de la semaine", price_cents: 950, max_qty: 5 }),
+      ] }),
+    ];
+    const rules = buildRequiredRules(tree);
+    // La salade (produit simple, sans groupe) ne génère aucune règle.
+    expect(rules).toHaveLength(1);
+    expect(rules[0].label).toBe("Boisson ou dessert inclus pour Formule Classique S");
+  });
+
+  it("arbre vide → aucune règle", () => {
+    expect(buildRequiredRules([])).toEqual([]);
   });
 });
 

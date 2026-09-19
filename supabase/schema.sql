@@ -279,44 +279,190 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- SEED — arbre du menu (miroir de src/data/restaurant.ts) + réglages
+-- SEED — LA VRAIE CARTE Ruga Pasta (menu officiel, à jour septembre 2026)
+--
+-- Structure = celle du tunnel de commande :
+--   • Compose ta box (S 6,50 € / M 8,50 €) avec 4 choix obligatoires et
+--     inclus (prix 0) : pâtes, sauce, fromage, toppings ;
+--   • Formules Classique (box + boisson OU dessert) et Gourmande (box +
+--     boisson + dessert) — choix inclus (prix 0). Le Tiramisu reste
+--     « hors formules », comme sur la carte papier ;
+--   • Salade de la semaine, boissons et desserts à l'unité.
+--
+-- ⚠️ À exécuter sur un projet SUPABASE VIERGE (première installation) :
+-- le seed ne supprime pas d'anciens nœuds (les commandes passées y font
+-- référence via order_items.node_id).
 -- ---------------------------------------------------------------------------
+-- Nettoyage de l'ANCIENNE structure (seed d'avant l'audit) : les groupes
+-- 'pates' et 'sauces' de la Box S sont remplacés par les 'box-s-*' avec
+-- garnitures. La suppression cascade sur leurs enfants ; on ne supprime
+-- que si AUCUNE commande passée ne les référence (sécurité historique).
+delete from public.menu_nodes m
+where m.id in ('pates', 'sauces')
+  and not exists (
+    select 1 from public.order_items oi where oi.node_id = m.id
+  );
+
 insert into public.menu_nodes (id, parent_id, name, kind, price_cents, max_qty, sort_order)
 values
-  ('menu',        null,    'Menu',                    'root', null, 1, 0),
+  ('menu', null, 'Menu', 'root', null, 1, 0),
 
-  ('box',         'menu',  'Compose ta box',          'group', null, 1, 10),
-  ('box-s',       'box',   'Box S',                   'item', 650, 10, 10),
-  ('box-m',       'box',   'Box M',                   'item', 850, 10, 20),
-  ('pates',       'box-s', 'Pâtes',                   'group', null, 1, 10),
-  ('pates-fusilli','pates','Fusilli',                 'item', 0,   1, 10),
-  ('pates-penne', 'pates', 'Penne',                   'item', 0,   1, 20),
-  ('pates-farfalle','pates','Farfalle',               'item', 0,   1, 30),
-  ('sauces',      'box-s', 'Sauces',                  'group', null, 1, 20),
-  ('sauce-tomate','sauces','Tomate',                  'item', 0,   1, 10),
-  ('sauce-bolo',  'sauces','Bolognaise',              'item', 0,   1, 20),
-  ('sauce-poulet','sauces','Poulet Curry',            'item', 0,   1, 30),
-  ('sauce-carbo', 'sauces','Carbonara',               'item', 0,   1, 40),
-  ('sauce-pesto', 'sauces','Pesto',                   'item', 0,   1, 50),
+  -- ── 📦 COMPOSE TA BOX ─────────────────────────────────────────────────────
+  ('box', 'menu', 'Compose ta box', 'group', null, 1, 10),
+  ('box-s', 'box', 'Box S', 'item', 650, 10, 10),
+  ('box-m', 'box', 'Box M', 'item', 850, 10, 20),
 
-  ('formules',    'menu',  'Formules',                'group', null, 1, 20),
-  ('f-classique-s','formules','Formule Classique S',  'item', 790, 10, 10),
-  ('f-classique-m','formules','Formule Classique M',  'item', 990, 10, 20),
-  ('f-gourmande-s','formules','Formule Gourmande S',  'item', 990, 10, 30),
-  ('f-gourmande-m','formules','Formule Gourmande M',  'item', 1190, 10, 40),
+  ('box-s-pates',     'box-s',        'Pâtes',            'group', null, 1, 10),
+  ('box-s-p-fusilli', 'box-s-pates',  'Fusilli',          'item', 0, 1, 10),
+  ('box-s-p-penne',   'box-s-pates',  'Penne',            'item', 0, 1, 20),
+  ('box-s-p-farfalle','box-s-pates',  'Farfalle',         'item', 0, 1, 30),
+  ('box-s-sauces',    'box-s',        'Sauces',           'group', null, 1, 20),
+  ('box-s-s-tomate',  'box-s-sauces', 'Tomate',           'item', 0, 1, 10),
+  ('box-s-s-bolo',    'box-s-sauces', 'Bolognaise',       'item', 0, 1, 20),
+  ('box-s-s-poulet',  'box-s-sauces', 'Poulet Curry',     'item', 0, 1, 30),
+  ('box-s-s-carbo',   'box-s-sauces', 'Carbonara',        'item', 0, 1, 40),
+  ('box-s-s-pesto',   'box-s-sauces', 'Pesto',            'item', 0, 1, 50),
+  ('box-s-fromage',   'box-s',        'Ton fromage',      'group', null, 1, 30),
+  ('box-s-f-parmesan','box-s-fromage','Parmesan',         'item', 0, 1, 10),
+  ('box-s-f-gruyere', 'box-s-fromage','Gruyère',          'item', 0, 1, 20),
+  ('box-s-f-mozza',   'box-s-fromage','Mozzarella râpée', 'item', 0, 1, 30),
+  ('box-s-tops',      'box-s',        'Tes toppings',     'group', null, 1, 40),
+  ('box-s-t-croute',  'box-s-tops',   'Croûtons',         'item', 0, 1, 10),
+  ('box-s-t-olives',  'box-s-tops',   'Olives',           'item', 0, 1, 20),
+  ('box-s-t-oignons', 'box-s-tops',   'Oignons frits',    'item', 0, 1, 30),
 
-  ('salade',      'menu',  'Salade de pâtes de la semaine', 'item', 950, 5, 30),
+  -- ── 🍴 FORMULES ───────────────────────────────────────────────────────────
+  ('formules',      'menu', 'Formules',             'group', null, 1, 20),
+  ('f-classique-s', 'formules', 'Formule Classique S', 'item', 790, 10, 10),
+  ('f-classique-m', 'formules', 'Formule Classique M', 'item', 990, 10, 20),
+  ('f-gourmande-s', 'formules', 'Formule Gourmande S', 'item', 990, 10, 30),
+  ('f-gourmande-m', 'formules', 'Formule Gourmande M', 'item', 1190, 10, 40),
 
-  ('boissons',    'menu',  'Boissons',                'group', null, 1, 40),
-  ('boisson-eau', 'boissons','Cristalline / San Pellegrino 50cL', 'item', 150, 5, 10),
-  ('boisson-coca','boissons','Coca-Cola / Zéro 33cL', 'item', 200, 5, 20),
-  ('boisson-soda','boissons','Orangina / Fuze Tea / Oasis 33cL', 'item', 200, 5, 30),
+  -- Classique : 1 boisson OU 1 dessert inclus (tiramisu exclu : « hors formules »)
+  ('fcs-choix',   'f-classique-s', 'Boisson ou dessert inclus', 'group', null, 1, 10),
+  ('fcs-b-eau',   'fcs-choix', 'Cristalline / San Pellegrino 50 cL', 'item', 0, 1, 10),
+  ('fcs-b-coca',  'fcs-choix', 'Coca-Cola / Zéro 33 cL',            'item', 0, 1, 20),
+  ('fcs-b-soda',  'fcs-choix', 'Orangina / Fuze Tea / Oasis 33 cL', 'item', 0, 1, 30),
+  ('fcs-d-cookies',   'fcs-choix', 'Cookies',       'item', 0, 1, 40),
+  ('fcs-d-donut',     'fcs-choix', 'Donuts',        'item', 0, 1, 50),
+  ('fcs-d-fromage',   'fcs-choix', 'Fromage blanc', 'item', 0, 1, 60),
+  ('fcm-choix',   'f-classique-m', 'Boisson ou dessert inclus', 'group', null, 1, 10),
+  ('fcm-b-eau',   'fcm-choix', 'Cristalline / San Pellegrino 50 cL', 'item', 0, 1, 10),
+  ('fcm-b-coca',  'fcm-choix', 'Coca-Cola / Zéro 33 cL',            'item', 0, 1, 20),
+  ('fcm-b-soda',  'fcm-choix', 'Orangina / Fuze Tea / Oasis 33 cL', 'item', 0, 1, 30),
+  ('fcm-d-cookies',   'fcm-choix', 'Cookies',       'item', 0, 1, 40),
+  ('fcm-d-donut',     'fcm-choix', 'Donuts',        'item', 0, 1, 50),
+  ('fcm-d-fromage',   'fcm-choix', 'Fromage blanc', 'item', 0, 1, 60),
 
-  ('desserts',    'menu',  'Desserts',                'group', null, 1, 50),
-  ('dess-cookie', 'desserts','Cookies',               'item', 300, 5, 10),
-  ('dess-donut',  'desserts','Donuts',                'item', 300, 5, 20),
-  ('dess-fb',     'desserts','Fromage blanc',         'item', 300, 5, 30),
-  ('dess-tiramisu','desserts','Tiramisu',             'item', 400, 5, 40)
+  -- Gourmande : 1 boisson + 1 dessert inclus
+  ('fgs-boisson', 'f-gourmande-s', 'Ta boisson incluse', 'group', null, 1, 10),
+  ('fgs-b-eau',   'fgs-boisson', 'Cristalline / San Pellegrino 50 cL', 'item', 0, 1, 10),
+  ('fgs-b-coca',  'fgs-boisson', 'Coca-Cola / Zéro 33 cL',            'item', 0, 1, 20),
+  ('fgs-b-soda',  'fgs-boisson', 'Orangina / Fuze Tea / Oasis 33 cL', 'item', 0, 1, 30),
+  ('fgs-dessert', 'f-gourmande-s', 'Ton dessert inclus', 'group', null, 1, 20),
+  ('fgs-d-cookies', 'fgs-dessert', 'Cookies',       'item', 0, 1, 10),
+  ('fgs-d-donut',   'fgs-dessert', 'Donuts',        'item', 0, 1, 20),
+  ('fgs-d-fromage', 'fgs-dessert', 'Fromage blanc', 'item', 0, 1, 30),
+  ('fgm-boisson', 'f-gourmande-m', 'Ta boisson incluse', 'group', null, 1, 10),
+  ('fgm-b-eau',   'fgm-boisson', 'Cristalline / San Pellegrino 50 cL', 'item', 0, 1, 10),
+  ('fgm-b-coca',  'fgm-boisson', 'Coca-Cola / Zéro 33 cL',            'item', 0, 1, 20),
+  ('fgm-b-soda',  'fgm-boisson', 'Orangina / Fuze Tea / Oasis 33 cL', 'item', 0, 1, 30),
+  ('fgm-dessert', 'f-gourmande-m', 'Ton dessert inclus', 'group', null, 1, 20),
+  ('fgm-d-cookies', 'fgm-dessert', 'Cookies',       'item', 0, 1, 10),
+  ('fgm-d-donut',   'fgm-dessert', 'Donuts',        'item', 0, 1, 20),
+  ('fgm-d-fromage', 'fgm-dessert', 'Fromage blanc', 'item', 0, 1, 30),
+
+  -- ── 🥗 À L'UNITÉ ──────────────────────────────────────────────────────────
+  ('salade', 'menu', 'Salade de pâtes de la semaine', 'item', 950, 5, 30),
+
+  ('boissons',    'menu', 'Boissons', 'group', null, 1, 40),
+  ('boisson-eau', 'boissons', 'Cristalline / San Pellegrino 50 cL', 'item', 150, 5, 10),
+  ('boisson-coca','boissons', 'Coca-Cola / Zéro 33 cL',            'item', 200, 5, 20),
+  ('boisson-soda','boissons', 'Orangina / Fuze Tea / Oasis 33 cL', 'item', 200, 5, 30),
+
+  ('desserts',    'menu', 'Desserts', 'group', null, 1, 50),
+  ('dess-cookie', 'desserts', 'Cookies',       'item', 300, 5, 10),
+  ('dess-donut',  'desserts', 'Donuts',        'item', 300, 5, 20),
+  ('dess-fb',     'desserts', 'Fromage blanc', 'item', 300, 5, 30),
+  ('dess-tiramisu','desserts','Tiramisu',      'item', 400, 5, 40)
+
+on conflict (id) do update
+  set parent_id = excluded.parent_id,
+      name = excluded.name,
+      kind = excluded.kind,
+      price_cents = excluded.price_cents,
+      max_qty = excluded.max_qty,
+      sort_order = excluded.sort_order;
+
+-- Box M = copie exacte des choix de la Box S (pâtes, sauces, fromage,
+-- toppings — tous inclus). Deux passes : les GROUPES d'abord (leurs parents
+-- existent déjà), les ITEMS ensuite. Le parent direct 'box-s' est remappé
+-- vers 'box-m' (cas non couvert par le replace sur les ids préfixés).
+-- ON CONFLICT : le script reste ré-exécutable sans dupliquer.
+insert into public.menu_nodes (id, parent_id, name, kind, price_cents, max_qty, sort_order)
+select
+  replace(n.id, 'box-s-', 'box-m-'),
+  case
+    when n.parent_id = 'box-s' then 'box-m'
+    else replace(n.parent_id, 'box-s-', 'box-m-')
+  end,
+  n.name, n.kind, n.price_cents, n.max_qty, n.sort_order
+from public.menu_nodes n
+where n.id like 'box-s-%' and n.kind = 'group'
+on conflict (id) do update
+  set parent_id = excluded.parent_id,
+      name = excluded.name,
+      kind = excluded.kind,
+      price_cents = excluded.price_cents,
+      max_qty = excluded.max_qty,
+      sort_order = excluded.sort_order;
+
+insert into public.menu_nodes (id, parent_id, name, kind, price_cents, max_qty, sort_order)
+select
+  replace(n.id, 'box-s-', 'box-m-'),
+  replace(n.parent_id, 'box-s-', 'box-m-'),
+  n.name, n.kind, n.price_cents, n.max_qty, n.sort_order
+from public.menu_nodes n
+where n.id like 'box-s-%' and n.kind <> 'group'
+on conflict (id) do update
+  set parent_id = excluded.parent_id,
+      name = excluded.name,
+      kind = excluded.kind,
+      price_cents = excluded.price_cents,
+      max_qty = excluded.max_qty,
+      sort_order = excluded.sort_order;
+
+-- Les FORMULES contiennent une box : mêmes choix (pâtes, sauce, fromage,
+-- toppings), copiés depuis la Box S pour chacune des 4 formules. Le choix
+-- boisson/dessert spécifique à chaque formule existe déjà (seed principal) ;
+-- ces groupes s'ajoutent après lui (sort_order décalé de +10).
+insert into public.menu_nodes (id, parent_id, name, kind, price_cents, max_qty, sort_order)
+select
+  replace(n.id, 'box-s-', f.id || '-'),
+  case when n.parent_id = 'box-s' then f.id
+       else replace(n.parent_id, 'box-s-', f.id || '-') end,
+  n.name, n.kind, n.price_cents, n.max_qty, n.sort_order + 10
+from public.menu_nodes n
+cross join (values ('f-classique-s'), ('f-classique-m'),
+                   ('f-gourmande-s'), ('f-gourmande-m')) as f(id)
+where n.id like 'box-s-%' and n.kind = 'group'
+on conflict (id) do update
+  set parent_id = excluded.parent_id,
+      name = excluded.name,
+      kind = excluded.kind,
+      price_cents = excluded.price_cents,
+      max_qty = excluded.max_qty,
+      sort_order = excluded.sort_order;
+
+insert into public.menu_nodes (id, parent_id, name, kind, price_cents, max_qty, sort_order)
+select
+  replace(n.id, 'box-s-', f.id || '-'),
+  replace(n.parent_id, 'box-s-', f.id || '-'),
+  n.name, n.kind, n.price_cents, n.max_qty, n.sort_order + 10
+from public.menu_nodes n
+cross join (values ('f-classique-s'), ('f-classique-m'),
+                   ('f-gourmande-s'), ('f-gourmande-m')) as f(id)
+where n.id like 'box-s-%' and n.kind <> 'group'
 on conflict (id) do update
   set parent_id = excluded.parent_id,
       name = excluded.name,
@@ -329,3 +475,55 @@ on conflict (id) do update
 -- si la ligne existe déjà).
 insert into public.store_settings (id) values (1)
 on conflict (id) do nothing;
+
+-- ===========================================================================
+-- IDempotence — une clé client (double-clic, réseau capricieux) ne doit
+-- JAMAIS produire deux commandes. Stockée sur la commande, indexée pour la
+-- recherche instantanée faite par l'API avant création.
+-- ===========================================================================
+alter table public.orders add column if not exists idempotency_key text;
+create unique index if not exists orders_idempotency_idx
+  on public.orders (client_key, idempotency_key)
+  where idempotency_key is not null;
+
+-- ===========================================================================
+-- DURCISSEMENT — tout ce qui est exécutable depuis le navigateur doit être
+-- fermé. Par défaut Postgres donne EXECUTE à PUBLIC sur les fonctions : la
+-- clé `anon` (publique par design) permettrait sinon d'appeler create_order
+-- directement et de court-circuiter l'anti-spam du serveur (honeypot,
+-- limites par téléphone/IP, horizon J+2). Le service_role, lui, n'est pas
+-- concerné : il contourne les privilèges par design.
+-- ===========================================================================
+revoke execute on function public.create_order(text, text, timestamptz, jsonb, text, text)
+  from public, anon, authenticated;
+
+-- ===========================================================================
+-- RGPD — purge automatique des commandes livrées depuis plus de 24 mois
+-- (au-delà du besoin comptable). Cohérent avec la mention de la page
+-- « Confidentialité ». À la demande d'un client (droit à l'effacement), le
+-- gérant supprime la commande concernée depuis le dashboard.
+-- ===========================================================================
+create or replace function public.purge_old_orders()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted integer;
+begin
+  delete from public.orders
+  where status = 'picked_up'
+    and pickup_at < now() - interval '24 months';
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
+-- Planification quotidienne (pg_cron est fourni par Supabase ; en son absence
+-- la purge reste disponible à la demande : select public.purge_old_orders();).
+create extension if not exists pg_cron;
+select cron.unschedule('ruga-purge-old-orders')
+where exists (select 1 from cron.job where jobname = 'ruga-purge-old-orders');
+select cron.schedule('ruga-purge-old-orders', '17 4 * * *',
+  $$select public.purge_old_orders();$$);

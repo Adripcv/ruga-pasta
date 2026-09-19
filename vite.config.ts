@@ -182,6 +182,9 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: "http://localhost:8787",
           changeOrigin: true,
+          // Transmet x-forwarded-host/proto/for : le garde CSRF de l'API
+          // compare l'Origin à l'hôte D'ORIGINE (pas à celui du proxy).
+          xfwd: true,
         },
       },
     },

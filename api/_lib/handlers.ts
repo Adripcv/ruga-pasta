@@ -90,9 +90,10 @@ export async function handleCreateOrder(
   input: CreateOrderInput,
 ): Promise<ApiResponse> {
   if (!isDbConfigured()) {
-    // Mode démonstration (DEV_MOCK_MENU=1, uniquement en dev) : valide le
-    // panier avec la VRAIE logique de prix mais ne persiste rien.
-    if (process.env.DEV_MOCK_MENU === "1") {
+    // Mode démonstration (DEV_MOCK_MENU=1, uniquement en dev — jamais en
+    // production, voir devMockTree) : valide le panier avec la VRAIE logique
+    // de prix mais ne persiste rien.
+    if (process.env.DEV_MOCK_MENU === "1" && process.env.VERCEL_ENV !== "production") {
       const mockBody = input.body as { cart?: unknown; name?: unknown } | null;
       const mockCart = Array.isArray(mockBody?.cart) ? mockBody!.cart : [];
       const priced = priceCart(devMockTree(), mockCart);
@@ -367,9 +368,43 @@ export async function handleSlots(
  * par `isDbConfigured()` dans `handleCreateOrder`).
  */
 function devMockTree(): MenuNode[] {
-  if (process.env.DEV_MOCK_MENU !== "1") return [];
+  // Durcissement : le mock est réservé au développement. Sur Vercel, aucune
+  // variable d'environnement n'est censée l'activer — et même si c'était le
+  // cas (erreur de configuration), la production refuse ce mode.
+  if (process.env.DEV_MOCK_MENU !== "1" || process.env.VERCEL_ENV === "production") {
+    return [];
+  }
   const item = (id: string, name: string, price_cents: number, max_qty = 1): MenuNode =>
     ({ id, name, price_cents, max_qty, children: [] });
+  const group = (id: string, name: string, children: MenuNode[]): MenuNode =>
+    ({ id, name, price_cents: null, max_qty: 1, children });
+
+  // Miroir du seed SQL (la vraie carte) : sert aux tests du tunnel sans base.
+  const boxChoices = (prefix: string): MenuNode[] => [
+    group(`${prefix}-pates`, "Pâtes", [
+      item(`${prefix}-p-fusilli`, "Fusilli", 0), item(`${prefix}-p-penne`, "Penne", 0), item(`${prefix}-p-farfalle`, "Farfalle", 0),
+    ]),
+    group(`${prefix}-sauces`, "Sauces", [
+      item(`${prefix}-s-tomate`, "Tomate", 0), item(`${prefix}-s-bolo`, "Bolognaise", 0), item(`${prefix}-s-poulet`, "Poulet Curry", 0), item(`${prefix}-s-carbo`, "Carbonara", 0), item(`${prefix}-s-pesto`, "Pesto", 0),
+    ]),
+    group(`${prefix}-fromage`, "Ton fromage", [
+      item(`${prefix}-f-parmesan`, "Parmesan", 0), item(`${prefix}-f-gruyere`, "Gruyère", 0), item(`${prefix}-f-mozza`, "Mozzarella râpée", 0),
+    ]),
+    group(`${prefix}-tops`, "Tes toppings", [
+      item(`${prefix}-t-croute`, "Croûtons", 0), item(`${prefix}-t-olives`, "Olives", 0), item(`${prefix}-t-oignons`, "Oignons frits", 0),
+    ]),
+  ];
+  const drinkDessert = (prefix: string, names: [string, string]): MenuNode[] => [
+    group(`${prefix}-${names[0]}`, names[1], [
+      item(`${prefix}-b-eau`, "Cristalline / San Pellegrino 50 cL", 0),
+      item(`${prefix}-b-coca`, "Coca-Cola / Zéro 33 cL", 0),
+      item(`${prefix}-b-soda`, "Orangina / Fuze Tea / Oasis 33 cL", 0),
+      item(`${prefix}-d-cookies`, "Cookies", 0),
+      item(`${prefix}-d-donut`, "Donuts", 0),
+      item(`${prefix}-d-fromage`, "Fromage blanc", 0),
+    ]),
+  ];
+
   return [
     {
       id: "menu", name: "Menu", price_cents: null, max_qty: 1,
@@ -377,24 +412,23 @@ function devMockTree(): MenuNode[] {
         {
           id: "box", name: "Compose ta box", price_cents: null, max_qty: 1,
           children: [
-            {
-              id: "box-s", name: "Box S", price_cents: 650, max_qty: 10,
-              children: [
-                { id: "pates", name: "Pâtes", price_cents: null, max_qty: 1, children: [item("pates-fusilli", "Fusilli", 0), item("pates-penne", "Penne", 0), item("pates-farfalle", "Farfalle", 0)] },
-                { id: "sauces", name: "Sauces", price_cents: null, max_qty: 1, children: [item("sauce-tomate", "Tomate", 0), item("sauce-bolo", "Bolognaise", 0), item("sauce-carbo", "Carbonara", 0), item("sauce-pesto", "Pesto", 0)] },
-              ],
-            },
-            { id: "box-m", name: "Box M", price_cents: 850, max_qty: 10, children: [] },
+            { id: "box-s", name: "Box S", price_cents: 650, max_qty: 10, children: boxChoices("box-s") },
+            { id: "box-m", name: "Box M", price_cents: 850, max_qty: 10, children: boxChoices("box-m") },
           ],
         },
         {
           id: "formules", name: "Formules", price_cents: null, max_qty: 1,
-          children: [item("f-classique-s", "Formule Classique S", 790, 10), item("f-classique-m", "Formule Classique M", 990, 10), item("f-gourmande-s", "Formule Gourmande S", 990, 10), item("f-gourmande-m", "Formule Gourmande M", 1190, 10)],
+          children: [
+            { id: "f-classique-s", name: "Formule Classique S", price_cents: 790, max_qty: 10, children: [...drinkDessert("fcs", ["choix", "Boisson ou dessert inclus"]), ...boxChoices("fcs")] },
+            { id: "f-classique-m", name: "Formule Classique M", price_cents: 990, max_qty: 10, children: [...drinkDessert("fcm", ["choix", "Boisson ou dessert inclus"]), ...boxChoices("fcm")] },
+            { id: "f-gourmande-s", name: "Formule Gourmande S", price_cents: 990, max_qty: 10, children: [...drinkDessert("fgs", ["boisson", "Ta boisson incluse"]), ...drinkDessert("fgs2", ["dessert", "Ton dessert inclus"]), ...boxChoices("fgs")] },
+            { id: "f-gourmande-m", name: "Formule Gourmande M", price_cents: 1190, max_qty: 10, children: [...drinkDessert("fgm", ["boisson", "Ta boisson incluse"]), ...drinkDessert("fgm2", ["dessert", "Ton dessert inclus"]), ...boxChoices("fgm")] },
+          ],
         },
         item("salade", "Salade de pâtes de la semaine", 950, 5),
         {
           id: "boissons", name: "Boissons", price_cents: null, max_qty: 1,
-          children: [item("boisson-eau", "Cristalline / San Pellegrino 50cL", 150, 5), item("boisson-coca", "Coca-Cola / Zéro 33cL", 200, 5), item("boisson-soda", "Orangina / Fuze Tea / Oasis 33cL", 200, 5)],
+          children: [item("boisson-eau", "Cristalline / San Pellegrino 50 cL", 150, 5), item("boisson-coca", "Coca-Cola / Zéro 33 cL", 200, 5), item("boisson-soda", "Orangina / Fuze Tea / Oasis 33 cL", 200, 5)],
         },
         {
           id: "desserts", name: "Desserts", price_cents: null, max_qty: 1,
@@ -553,6 +587,15 @@ const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_LOGIN_ATTEMPTS = 8;
 const LOGIN_WINDOW_MS = 15 * 60_000;
 
+/**
+ * Second compteur, PAR EMAIL : bloque le martèlement d'un compte précis
+ * même si l'attaquant fait tourner ses adresses IP (botnets, fermes de
+ * proxies). Plafond mémoire : les clés sont des emails allowlistés ou non,
+ * on purge au-delà d'un seuil raisonnable.
+ */
+const loginAttemptsByEmail = new Map<string, { count: number; resetAt: number }>();
+const MAX_LOGIN_ATTEMPTS_EMAIL = 10;
+
 export async function handleAdminLogin(
   body: unknown,
   ip: string | null,
@@ -570,10 +613,10 @@ export async function handleAdminLogin(
     return bad(400, "BAD_PAYLOAD");
   }
   const email = payload.email.trim().toLowerCase();
+  const nowMs = Date.now();
 
   // Rate limit IP (mémoire d'instance : un filet de plus, Supabase limite aussi).
   const key = ip ?? "unknown";
-  const nowMs = Date.now();
   const entry = loginAttempts.get(key);
   if (entry && entry.resetAt > nowMs && entry.count >= MAX_LOGIN_ATTEMPTS) {
     return bad(429, "TOO_MANY_ATTEMPTS",
@@ -585,6 +628,20 @@ export async function handleAdminLogin(
     entry.count += 1;
   }
   if (loginAttempts.size > 5_000) loginAttempts.clear(); // bornes mémoire
+
+  // Rate limit par EMAIL : indépendant de l'IP (voir commentaire ci-dessus).
+  // Même message que pour l'IP : aucune information utile à l'attaquant.
+  const emailEntry = loginAttemptsByEmail.get(email);
+  if (emailEntry && emailEntry.resetAt > nowMs && emailEntry.count >= MAX_LOGIN_ATTEMPTS_EMAIL) {
+    return bad(429, "TOO_MANY_ATTEMPTS",
+      { message: "Trop de tentatives — réessaie dans un quart d'heure." });
+  }
+  if (!emailEntry || emailEntry.resetAt <= nowMs) {
+    loginAttemptsByEmail.set(email, { count: 1, resetAt: nowMs + LOGIN_WINDOW_MS });
+  } else {
+    emailEntry.count += 1;
+  }
+  if (loginAttemptsByEmail.size > 1_000) loginAttemptsByEmail.clear();
 
   // Allowlist AVANT tout contact avec Supabase : un email hors liste ne
   // produit aucun indice (même message et même délai qu'un mauvais mot de passe).

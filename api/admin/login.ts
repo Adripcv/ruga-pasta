@@ -4,10 +4,12 @@
  * est vérifiée AVANT toute requête d'authentification.
  */
 import { handleAdminLogin } from "../_lib/handlers.js";
-import { ipFrom, json, methodNotAllowed, readJson } from "../_lib/http.js";
+import { csrfGuard, ipFrom, json, methodNotAllowed, readJson } from "../_lib/http.js";
 
 export async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return methodNotAllowed("POST");
+  const csrf = csrfGuard(req);
+  if (csrf) return csrf;
   const body = await readJson(req);
   return json(await handleAdminLogin(body, ipFrom(req)));
 }
