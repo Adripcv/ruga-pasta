@@ -19,6 +19,45 @@
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------
+-- ÉQUIPE — comptes staff (rôles) au-delà du gérant (allowlist env)
+-- ---------------------------------------------------------------------------
+-- Le gérant (ADMIN_EMAILS) reste l'autorité suprême. Cette table attribue un
+-- rôle aux comptes Supabase Auth créés par le gérant depuis le dashboard :
+--   admin  : tout comme le gérant (analytics, carte, équipe, réglages)
+--   staff  : service seulement — commandes, statuts, étiquettes. PAS les
+--            prix, le CA, l'analytique, la carte ni les réglages.
+-- RLS deny-all comme partout : lue uniquement par le serveur (service_role).
+create table if not exists public.admin_users (
+  email      text primary key check (email = lower(email)),
+  role       text not null default 'staff' check (role in ('admin','staff')),
+  label      text,                      -- « Sarah — cuisine » (facultatif)
+  created_by text not null,             -- email de l'admin créateur
+  created_at timestamptz not null default now()
+);
+
+-- Purge automatique si le compte Auth est supprimé côté Supabase.
+-- (Supabase ne propage pas les suppressions auth → base : ce trigger comble
+-- le trou et évite des comptes fantômes dans l'onglet Équipe.)
+create or replace function public.sync_admin_users()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (tg_op = 'DELETE') then
+    delete from public.admin_users where email = lower(old.email);
+  end if;
+  return coalesce(old, new);
+end;
+$$;
+
+drop trigger if exists admin_users_auth_sync on auth.users;
+create trigger admin_users_auth_sync
+  after delete on auth.users
+  for each row execute function public.sync_admin_users();
+
+-- ---------------------------------------------------------------------------
 -- MENU — arbre produit/groupes (miroir de la carte affichée sur le site)
 -- ---------------------------------------------------------------------------
 create table if not exists public.menu_nodes (

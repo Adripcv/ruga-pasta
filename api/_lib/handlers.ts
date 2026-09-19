@@ -469,14 +469,33 @@ const ALLOWED_EMAILS = (): string[] =>
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
+export type AdminRole = "admin" | "staff";
+
+/**
+ * Rôle d'un email : « admin » pour l'allowlist env (le gérant), sinon la
+ * table admin_users (comptes staff créés depuis le dashboard), sinon null.
+ * La base est l'autorité — jamais le client.
+ */
+async function resolveRole(email: string): Promise<AdminRole | null> {
+  if (ALLOWED_EMAILS().includes(email)) return "admin";
+  const { data, error } = await serviceRole()
+    .from("admin_users")
+    .select("role")
+    .eq("email", email)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.role === "admin" ? "admin" : "staff";
+}
+
 /**
  * Vérifie le JWT côté serveur via `auth.getUser(token)` (validation
  * cryptographique par Supabase, pas un simple décodage base64 falsifiable),
- * puis l'email allowlist. Fail-closed : sans configuration, tout est refusé.
+ * puis résout le rôle (gérant env → admin, table admin_users sinon).
+ * Fail-closed : sans configuration, tout est refusé.
  */
 export async function requireAdmin(
   ctx: AdminContext,
-): Promise<{ ok: true; email: string } | { ok: false; response: ApiResponse }> {
+): Promise<{ ok: true; email: string; role: AdminRole } | { ok: false; response: ApiResponse }> {
   if (!isDbConfigured()) {
     return { ok: false, response: bad(503, "ORDERING_UNAVAILABLE") };
   }
@@ -487,10 +506,23 @@ export async function requireAdmin(
     return { ok: false, response: bad(401, "UNAUTHORIZED") };
   }
   const email = (data.user.email ?? "").toLowerCase();
-  if (!ALLOWED_EMAILS().includes(email)) {
+  const role = await resolveRole(email);
+  if (!role) {
     return { ok: false, response: bad(403, "FORBIDDEN") };
   }
-  return { ok: true, email };
+  return { ok: true, email, role };
+}
+
+/** Comme requireAdmin, mais exige le rôle « admin » (gérant ou admin délégué). */
+export async function requireFullAdmin(
+  ctx: AdminContext,
+): Promise<{ ok: true; email: string } | { ok: false; response: ApiResponse }> {
+  const auth = await requireAdmin(ctx);
+  if (!auth.ok) return auth;
+  if (auth.role !== "admin") {
+    return { ok: false, response: bad(403, "FORBIDDEN", { message: "Réservé au gérant." }) };
+  }
+  return { ok: true, email: auth.email };
 }
 
 /**
@@ -589,11 +621,16 @@ export async function handleAdminLogin(
   const session = (await res.json()) as { access_token?: string; expires_in?: number };
   if (!session.access_token) return bad(502, "AUTH_FAILED");
 
-  // Re-vérifie l'email du JWT (défense en profondeur).
+  // Re-vérifie l'email du JWT (défense en profondeur) et résout le rôle :
+  // gérant (allowlist env) → « admin », compte staff (table) → son rôle.
   const { data: userData, error: userErr } = await serviceRole()
     .auth.getUser(session.access_token);
   const tokenEmail = (userData?.user?.email ?? "").toLowerCase();
-  if (userErr || !tokenEmail || !ALLOWED_EMAILS().includes(tokenEmail)) {
+  if (userErr || !tokenEmail) {
+    return bad(403, "FORBIDDEN");
+  }
+  const role = await resolveRole(tokenEmail);
+  if (!role) {
     return bad(403, "FORBIDDEN");
   }
 
@@ -602,12 +639,146 @@ export async function handleAdminLogin(
     access_token: session.access_token,
     expires_in: session.expires_in ?? 3600,
     email: tokenEmail,
+    role,
   });
 }
 
-/** GET /api/admin/menu — liste plate du menu pour le dashboard. */
+/**
+ * POST /api/admin/users — gestion des comptes staff (rôle admin requis).
+ *   action "list"    → comptes + rôle
+ *   action "create"  → { email, password, role, label? } : crée le compte
+ *                      Auth (auto-confirmé) + la ligne admin_users
+ *   action "delete"  → supprime compte Auth + ligne admin_users
+ * Un seul endpoint : on reste sous la limite de fonctions Vercel Hobby.
+ */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export async function handleAdminUsers(
+  ctx: AdminContext,
+  body: unknown,
+): Promise<ApiResponse> {
+  const auth = await requireFullAdmin(ctx);
+  if (!auth.ok) return auth.response;
+
+  const payload = body as {
+    action?: unknown;
+    email?: unknown;
+    password?: unknown;
+    role?: unknown;
+    label?: unknown;
+  } | null;
+  if (!payload || typeof payload.action !== "string") return bad(400, "BAD_PAYLOAD");
+
+  // ---- LIST -------------------------------------------------------------
+  if (payload.action === "list") {
+    const { data, error } = await serviceRole()
+      .from("admin_users")
+      .select("email, role, label, created_at")
+      .order("created_at");
+    if (error) return bad(500, "DB_ERROR");
+    return ok({ users: data ?? [] });
+  }
+
+  // ---- CREATE -----------------------------------------------------------
+  if (payload.action === "create") {
+    const email =
+      typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+    const password = typeof payload.password === "string" ? payload.password : "";
+    const role = payload.role === "admin" ? "admin" : "staff";
+    const label =
+      typeof payload.label === "string" && payload.label.trim()
+        ? payload.label.trim().slice(0, 60)
+        : null;
+
+    if (!EMAIL_RE.test(email) || email.length > 120) {
+      return bad(400, "BAD_EMAIL", { message: "Adresse email invalide." });
+    }
+    if (password.length < 8 || password.length > 200) {
+      return bad(400, "BAD_PASSWORD", {
+        message: "Le mot de passe doit faire au moins 8 caractères.",
+      });
+    }
+    // Le gérant ne se crée pas en double, un compte staff actif ne peut pas
+    // être réutilisé (évite d'écraser un rôle existant par erreur).
+    if (ALLOWED_EMAILS().includes(email)) {
+      return bad(409, "ALREADY_EXISTS", {
+        message: "Ce compte existe déjà (gérant).",
+      });
+    }
+    const { data: existing } = await serviceRole()
+      .from("admin_users")
+      .select("email")
+      .eq("email", email)
+      .maybeSingle();
+    if (existing) {
+      return bad(409, "ALREADY_EXISTS", { message: "Ce compte existe déjà." });
+    }
+
+    // Compte Auth auto-confirmé (pas d'email d'activation : le mot de passe
+    // est communiqué de gérant à salarié en personne).
+    const created = await serviceRole().auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (created.error || !created.data?.user) {
+      return bad(502, "AUTH_FAILED", {
+        message: "Création du compte impossible (email déjà pris côté auth ?).",
+      });
+    }
+
+    const { error: insertErr } = await serviceRole()
+      .from("admin_users")
+      .insert({ email, role, label, created_by: auth.email });
+    if (insertErr) {
+      // Cohérence : si la ligne n'a pas pu être écrite, on ne laisse pas un
+      // compte Auth orphelin capable de se connecter sans rôle.
+      await serviceRole().auth.admin.deleteUser(created.data.user.id);
+      return bad(500, "DB_ERROR");
+    }
+    return ok({ ok: true, email, role, label });
+  }
+
+  // ---- DELETE -----------------------------------------------------------
+  if (payload.action === "delete") {
+    const email =
+      typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+    if (!EMAIL_RE.test(email)) return bad(400, "BAD_PAYLOAD");
+
+    // Le compte Auth porte l'id : on le retrouve pour supprimer les deux.
+    let userId: string | null = null;
+    let page = 1;
+    for (;;) {
+      const listed = await serviceRole().auth.admin.listUsers({ page, perPage: 200 });
+      const found = listed.data?.users?.find(
+        (u) => (u.email ?? "").toLowerCase() === email,
+      );
+      if (found) {
+        userId = found.id;
+        break;
+      }
+      if (listed.data?.users && listed.data.users.length < 200) break;
+      page += 1;
+      if (page > 20) break; // garde-fou : 4 000 comptes max
+    }
+    if (userId) {
+      const del = await serviceRole().auth.admin.deleteUser(userId);
+      if (del.error) return bad(502, "AUTH_FAILED", { message: "Suppression du compte impossible." });
+    }
+    // La ligne admin_users saute aussi (le trigger ne couvre que auth.users).
+    await serviceRole().from("admin_users").delete().eq("email", email);
+    return ok({ ok: true });
+  }
+
+  return bad(400, "BAD_ACTION");
+}
+
+/**
+ * GET (ou POST) /api/admin/menu — liste plate du menu pour le dashboard.
+ * Rôle admin requis : le staff ne voit ni la carte ni les prix.
+ */
 export async function handleAdminMenuGet(ctx: AdminContext): Promise<ApiResponse> {
-  const auth = await requireAdmin(ctx);
+  const auth = await requireFullAdmin(ctx);
   if (!auth.ok) return auth.response;
   const { data, error } = await serviceRole()
     .from("menu_nodes")
@@ -617,17 +788,25 @@ export async function handleAdminMenuGet(ctx: AdminContext): Promise<ApiResponse
   return ok({ items: data ?? [] });
 }
 
-/** GET /api/admin/settings — réglages courants pour le dashboard. */
+/**
+ * GET (ou POST) /api/admin/settings — réglages courants pour le dashboard.
+ * Rôle admin requis (le staff n'a pas besoin des réglages opérationnels).
+ */
 export async function handleAdminSettingsGet(
   ctx: AdminContext,
 ): Promise<ApiResponse> {
-  const auth = await requireAdmin(ctx);
+  const auth = await requireFullAdmin(ctx);
   if (!auth.ok) return auth.response;
   const settings = await getSettings();
   return ok({ settings });
 }
 
-/** GET /api/admin/orders?day=YYYY-MM-DD — commandes du jour (ou d'une date). */
+/**
+ * GET /api/admin/orders?day=YYYY-MM-DD — commandes du jour (ou d'une date).
+ * Accessible au staff : c'est l'écran de service (commandes + statuts).
+ * Pour le rôle staff, les montants (total + lignes) sont masqués : le CA
+ * ne concerne pas la cuisine ni la salle.
+ */
 export async function handleAdminOrders(
   ctx: AdminContext,
   day: string | null,
@@ -652,10 +831,21 @@ export async function handleAdminOrders(
     .order("pickup_at", { ascending: true });
 
   if (error) return bad(500, "DB_ERROR");
-  return ok({ day: target, orders: data ?? [], slotCapacity: settings.capacity_per_slot });
+
+  // Staff : montants retirés côté serveur (pas juste cachés côté client).
+  const orders =
+    auth.role === "staff"
+      ? (data ?? []).map((o) => ({
+          ...o,
+          total_cents: null,
+          order_items: (o.order_items ?? []).map((it) => ({ ...it, line_cents: null })),
+        }))
+      : (data ?? []);
+
+  return ok({ day: target, orders, slotCapacity: settings.capacity_per_slot, role: auth.role });
 }
 
-/** POST /api/admin/orders — changer le statut (machine à états vérifiée). */
+/** POST /api/admin/order-status — changer le statut (machine à états vérifiée). Staff OK. */
 export async function handleAdminUpdateOrder(
   ctx: AdminContext,
   body: unknown,
@@ -697,12 +887,12 @@ export async function handleAdminUpdateOrder(
   return ok({ ok: true, code: payload.code, status: next });
 }
 
-/** GET /api/admin/stats?days=N — analytics riches pour le dashboard. */
+/** GET /api/admin/stats?days=N — analytics riches (rôle admin uniquement). */
 export async function handleAdminStats(
   ctx: AdminContext,
   daysParam: string | null,
 ): Promise<ApiResponse> {
-  const auth = await requireAdmin(ctx);
+  const auth = await requireFullAdmin(ctx);
   if (!auth.ok) return auth.response;
 
   const days = Math.min(Math.max(Number(daysParam ?? 7) || 7, 1), 90);
@@ -760,7 +950,7 @@ export async function handleAdminMenuUpdate(
   ctx: AdminContext,
   body: unknown,
 ): Promise<ApiResponse> {
-  const auth = await requireAdmin(ctx);
+  const auth = await requireFullAdmin(ctx);
   if (!auth.ok) return auth.response;
 
   const payload = body as Record<string, unknown> | null;
@@ -944,7 +1134,7 @@ export async function handleAdminSettingsUpdate(
   ctx: AdminContext,
   body: unknown,
 ): Promise<ApiResponse> {
-  const auth = await requireAdmin(ctx);
+  const auth = await requireFullAdmin(ctx);
   if (!auth.ok) return auth.response;
 
   const payload = body as Partial<

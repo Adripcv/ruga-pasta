@@ -7,6 +7,7 @@ import {
   TrendBadge,
   euros,
 } from "./charts";
+import { describeGroups, groupOrderItems } from "./orderDisplay";
 
 // ---------------------------------------------------------------------------
 // Client API admin (même origine, token en mémoire — jamais localStorage :
@@ -50,15 +51,24 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
 // Session
 // ---------------------------------------------------------------------------
 
-const SESSION_KEY = "ruga-admin-email";
+const SESSION_KEY = "ruga-admin-session";
 
-function setSession(email: string | null) {
-  if (email) sessionStorage.setItem(SESSION_KEY, email);
+type SessionInfo = { email: string; role: "admin" | "staff" };
+
+function setSession(session: SessionInfo | null) {
+  if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   else sessionStorage.removeItem(SESSION_KEY);
 }
 
-function getSession(): string | null {
-  return sessionStorage.getItem(SESSION_KEY);
+function getSession(): SessionInfo | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SessionInfo;
+    return parsed?.email ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -71,10 +81,11 @@ type OrderRow = {
   customer_phone: string;
   pickup_at: string;
   status: "new" | "preparing" | "ready" | "picked_up" | "cancelled";
-  total_cents: number;
+  /** null pour le rôle staff : le CA ne le concerne pas. */
+  total_cents: number | null;
   payment_status: string;
   note: string | null;
-  order_items: { name: string; qty: number; line_cents: number; path: string[] }[];
+  order_items: { name: string; qty: number; line_cents: number | null; path: string[] }[];
 };
 
 type RichStats = {
@@ -157,7 +168,11 @@ const parisToday = () =>
 // Vues
 // ---------------------------------------------------------------------------
 
-function LoginView({ onLoggedIn }: { onLoggedIn: (email: string) => void }) {
+function LoginView({
+  onLoggedIn,
+}: {
+  onLoggedIn: (session: SessionInfo) => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -177,14 +192,16 @@ function LoginView({ onLoggedIn }: { onLoggedIn: (email: string) => void }) {
         ok?: boolean;
         access_token?: string;
         email?: string;
+        role?: "admin" | "staff";
         message?: string;
       };
       if (!res.ok || !body.access_token) {
         throw new Error(body.message || "Connexion refusée.");
       }
+      const session = { email: body.email ?? email, role: body.role ?? "staff" };
       accessToken = body.access_token;
-      setSession(body.email ?? email);
-      onLoggedIn(body.email ?? email);
+      setSession(session);
+      onLoggedIn(session);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue");
     } finally {
@@ -199,7 +216,7 @@ function LoginView({ onLoggedIn }: { onLoggedIn: (email: string) => void }) {
         className="w-full max-w-sm rounded-[2rem] border border-ink/10 bg-white p-8 shadow-[0_26px_60px_-34px_rgba(43,26,16,0.5)]"
       >
         <img src="/images/logo-emblem.png" alt="" width="202" height="152" className="mx-auto h-14 w-auto" />
-        <h1 className="h-serif mt-4 text-center text-2xl font-black">Espace gérant</h1>
+        <h1 className="h-serif mt-4 text-center text-2xl font-black">Espace équipe</h1>
         <label className="mt-6 block">
           <span className="text-sm font-extrabold tracking-wide text-ink/70 uppercase">Email</span>
           <input
@@ -288,6 +305,8 @@ function OrderCard({
   busy: boolean;
   onPrint: (order: OrderRow) => void;
 }) {
+  const groups = useMemo(() => groupOrderItems(order.order_items), [order.order_items]);
+
   const when = new Intl.DateTimeFormat("fr-FR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -325,13 +344,19 @@ function OrderCard({
         </div>
       </div>
 
-      <ul className="mt-3 space-y-1 text-sm text-ink/80">
-        {order.order_items.map((item, i) => (
-          <li key={i} className="flex justify-between gap-3 border-b border-dashed border-ink/10 pb-1 last:border-0">
-            <span>
-              <strong>{item.qty}×</strong> {item.path.filter(Boolean).join(" › ")}
-            </span>
-            <span className="shrink-0 font-semibold">{euros(item.line_cents)}</span>
+      <ul className="mt-3 space-y-2 text-sm">
+        {groups.map((group, i) => (
+          <li key={i}>
+            <p className="font-black text-ink">
+              {group.qty > 1 ? `${group.qty}× ` : ""}{group.title} :
+            </p>
+            {group.extras.length > 0 && (
+              <ul className="mt-0.5 ml-4 list-disc text-ink/75">
+                {group.extras.map((extra, j) => (
+                  <li key={j}>{extra}</li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>
@@ -343,7 +368,11 @@ function OrderCard({
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="font-display text-lg font-black">{euros(order.total_cents)}</p>
+        {order.total_cents !== null ? (
+          <p className="font-display text-lg font-black">{euros(order.total_cents)}</p>
+        ) : (
+          <span />)
+        }
         <div className="flex flex-wrap gap-2">
           {NEXT_ACTIONS[order.status].map((next) => (
             <button
@@ -591,7 +620,7 @@ function MenuView() {
 
   const load = useCallback(async () => {
     try {
-      const data = await adminFetch<{ items: MenuItemRow[] }>("/api/admin/menu-get");
+      const data = await adminFetch<{ items: MenuItemRow[] }>("/api/admin/menu");
       setItems(data.items);
       setError(null);
     } catch (err) {
@@ -1113,10 +1142,10 @@ function SettingsView({
 /*  App principale                                                            */
 /* -------------------------------------------------------------------------- */
 
-type Tab = "orders" | "analytics" | "history" | "menu" | "settings";
+type Tab = "orders" | "analytics" | "history" | "menu" | "settings" | "team";
 
 export function AdminApp() {
-  const [email, setEmail] = useState<string | null>(getSession());
+  const [session, setSessionState] = useState<SessionInfo | null>(getSession());
   const [tab, setTab] = useState<Tab>("orders");
   const [day, setDay] = useState(parisToday());
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
@@ -1127,15 +1156,17 @@ export function AdminApp() {
   const [search, setSearch] = useState("");
   const [statsDays, setStatsDays] = useState(7);
 
+  const isAdmin = session?.role === "admin";
+
   const logout = useCallback(() => {
     accessToken = null;
     setSession(null);
-    setEmail(null);
+    setSessionState(null);
   }, []);
 
   // Expiration du jeton pendant une session (401) : retour au login propre.
   useEffect(() => {
-    const onUnauthorized = () => setEmail(null);
+    const onUnauthorized = () => setSessionState(null);
     window.addEventListener("ruga-admin-unauthorized", onUnauthorized);
     return () => window.removeEventListener("ruga-admin-unauthorized", onUnauthorized);
   }, []);
@@ -1154,7 +1185,7 @@ export function AdminApp() {
 
   // Commandes du jour — rafraîchies toutes les 30 s.
   useEffect(() => {
-    if (!email || (tab !== "orders" && tab !== "history")) return;
+    if (!session || (tab !== "orders" && tab !== "history")) return;
     let cancelled = false;
     const check = () => {
       if (!cancelled) void loadOrders();
@@ -1165,7 +1196,7 @@ export function AdminApp() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [email, tab, day, reloadKey, loadOrders]);
+  }, [session, tab, day, reloadKey, loadOrders]);
 
   const changeStatus = async (code: string, status: OrderRow["status"]) => {
     setBusy(true);
@@ -1189,7 +1220,10 @@ export function AdminApp() {
       live,
       newCount: live.filter((o) => o.status === "new").length,
       readyCount: live.filter((o) => o.status === "ready").length,
-      revenue: live.reduce((s, o) => s + o.total_cents, 0),
+      // null = rôle staff : le serveur masque les montants, on n'affiche rien.
+      revenue: live.some((o) => o.total_cents === null)
+        ? null
+        : live.reduce((s, o) => s + (o.total_cents ?? 0), 0),
     };
   }, [orders]);
 
@@ -1212,18 +1246,30 @@ export function AdminApp() {
   /** Export CSV du jour filtré (tableur : Excel, Numbers, LibreOffice). */
   const exportCsv = () => {
     if (!filteredOrders?.length) return;
+    const showPrices = !dayOrders || dayOrders.revenue !== null;
     const rows = [
-      ["Code", "Client", "Téléphone", "Retrait", "Statut", "Articles", "Total (€)", "Note"],
-      ...filteredOrders.map((o) => [
-        o.code,
-        o.customer_name,
-        o.customer_phone,
-        new Date(o.pickup_at).toLocaleString("fr-FR"),
-        STATUS_LABELS[o.status],
-        o.order_items.map((i) => `${i.qty}x ${i.path.filter(Boolean).join("/")}`).join(" | "),
-        (o.total_cents / 100).toFixed(2).replace(".", ","),
-        (o.note ?? "").replace(/[\r\n;]+/g, " "),
-      ]),
+      showPrices
+        ? ["Code", "Client", "Téléphone", "Retrait", "Statut", "Articles", "Total (€)", "Note"]
+        : ["Code", "Client", "Téléphone", "Retrait", "Statut", "Articles", "Note"],
+      ...filteredOrders.map((o) => {
+        const items = describeGroups(groupOrderItems(o.order_items));
+        const base = [
+          o.code,
+          o.customer_name,
+          o.customer_phone,
+          new Date(o.pickup_at).toLocaleString("fr-FR"),
+          STATUS_LABELS[o.status],
+          items,
+        ];
+        if (!showPrices) {
+          return [...base, (o.note ?? "").replace(/[\r\n;]+/g, " ")];
+        }
+        return [
+          ...base,
+          ((o.total_cents ?? 0) / 100).toFixed(2).replace(".", ","),
+          (o.note ?? "").replace(/[\r\n;]+/g, " "),
+        ];
+      }),
     ];
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
     const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -1235,14 +1281,20 @@ export function AdminApp() {
     URL.revokeObjectURL(url);
   };
 
-  if (!email) return <LoginView onLoggedIn={setEmail} />;
+  if (!session) return <LoginView onLoggedIn={setSessionState} />;
 
+  // Onglets selon le rôle : le staff ne voit que le service (commandes).
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "orders", label: "Service", icon: "🍽️" },
-    { key: "analytics", label: "Analytique", icon: "📈" },
-    { key: "history", label: "Historique", icon: "🗂️" },
-    { key: "menu", label: "Carte", icon: "🧾" },
-    { key: "settings", label: "Réglages", icon: "⚙️" },
+    ...(isAdmin
+      ? ([
+          { key: "analytics", label: "Analytique", icon: "📈" },
+          { key: "history", label: "Historique", icon: "🗂️" },
+          { key: "menu", label: "Carte", icon: "🧾" },
+          { key: "settings", label: "Réglages", icon: "⚙️" },
+          { key: "team", label: "Équipe", icon: "👥" },
+        ] as const)
+      : []),
   ];
 
   const isServiceView = tab === "orders";
@@ -1264,7 +1316,12 @@ export function AdminApp() {
           <img src="/images/logo-emblem.png" alt="" width="202" height="152" className="h-10 w-auto" />
           <div>
             <h1 className="h-serif text-xl font-black leading-none">Tableau de bord</h1>
-            <p className="text-xs text-ink/50">{email}</p>
+            <p className="text-xs text-ink/50">
+              {session.email}
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold uppercase ${isAdmin ? "bg-olive/15 text-olive" : "bg-sun/20 text-[#8a5b0a]"}`}>
+                {isAdmin ? "gérant" : "équipe"}
+              </span>
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1328,7 +1385,9 @@ export function AdminApp() {
           </div>
           <div className="rounded-2xl border border-ink/10 bg-white p-4">
             <p className="text-xs font-extrabold tracking-wide text-ink/50 uppercase">CA du jour</p>
-            <p className="font-display text-3xl font-black">{euros(dayOrders.revenue)}</p>
+            <p className="font-display text-3xl font-black">
+              {dayOrders.revenue !== null ? euros(dayOrders.revenue) : "—"}
+            </p>
           </div>
         </div>
       )}
@@ -1420,11 +1479,14 @@ export function AdminApp() {
         </section>
       )}
 
-      {/* ---------- ANALYTICS ---------- */}
+      {/* ---------- ANALYTICS (admin) ---------- */}
       {tab === "analytics" && <AnalyticsView days={statsDays} setDays={setStatsDays} />}
 
-      {/* ---------- CARTE ---------- */}
+      {/* ---------- CARTE (admin) ---------- */}
       {tab === "menu" && <MenuView />}
+
+      {/* ---------- ÉQUIPE (admin) ---------- */}
+      {tab === "team" && <TeamView />}
 
       {/* ---------- RÉGLAGES ---------- */}
       {tab === "settings" && (
@@ -1441,7 +1503,7 @@ function SettingsPlaceholder({ onRetry }: { onRetry: () => void }) {
 
   const load = useCallback(async () => {
     try {
-      const data = await adminFetch<{ settings: Settings }>("/api/admin/settings-get");
+      const data = await adminFetch<{ settings: Settings }>("/api/admin/settings");
       setSettings(data.settings);
       setError(null);
     } catch (err) {
@@ -1479,13 +1541,24 @@ function printLabel(order: OrderRow) {
     minute: "2-digit",
   }).format(new Date(order.pickup_at));
 
-  const lines = order.order_items
-    .map(
-      (item) => `<tr>
-        <td class="qty">${item.qty}×</td>
-        <td>${item.path.filter(Boolean).join(" · ")}</td>
-      </tr>`,
-    )
+  const groups = groupOrderItems(order.order_items);
+  const lines = groups
+    .map((group) => {
+      const extras = group.extras.map((e) =>
+        e.replace(/&/g, "&amp;").replace(/</g, "&lt;").slice(0, 60),
+      );
+      const title = group.title.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const qty = group.qty > 1 ? `${group.qty}× ` : "";
+      if (extras.length === 0) {
+        return `<tr><td class="qty">${qty}</td><td>${title}</td></tr>`;
+      }
+      return `<tr>
+        <td class="qty">${qty}</td>
+        <td><strong>${title} :</strong>
+          <ul class="extras">${extras.map((e) => `<li>${e}</li>`).join("")}</ul>
+        </td>
+      </tr>`;
+    })
     .join("");
 
   const html = `<!doctype html>
@@ -1504,6 +1577,8 @@ function printLabel(order: OrderRow) {
   table { width: 100%; margin-top: 5mm; border-collapse: collapse; }
   td { padding: 2.5mm 0; border-bottom: 1px dashed #999; font-size: 13pt; vertical-align: top; }
   td.qty { font-weight: 900; width: 12mm; white-space: nowrap; }
+  ul.extras { margin: 1mm 0 0 5mm; padding: 0; list-style: disc; }
+  ul.extras li { font-size: 11.5pt; border: 0; padding: 0.5mm 0; }
   .note { margin-top: 4mm; font-size: 12pt; font-weight: 700; background: #fff3c4;
           border: 1px solid #d9b300; border-radius: 2mm; padding: 2.5mm 3mm; }
   .foot { margin-top: 5mm; font-size: 9pt; color: #666; text-align: center; }
@@ -1535,4 +1610,215 @@ function printLabel(order: OrderRow) {
   }
   win.document.write(html);
   win.document.close();
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Vue ÉQUIPE — création et gestion des comptes staff (rôle admin requis)     */
+/* -------------------------------------------------------------------------- */
+
+type TeamUser = { email: string; role: "admin" | "staff"; label: string | null; created_at: string };
+
+function TeamView() {
+  const [users, setUsers] = useState<TeamUser[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"staff" | "admin">("staff");
+  const [label, setLabel] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const data = await adminFetch<{ users: TeamUser[] }>("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify({ action: "list" }),
+      });
+      setUsers(data.users);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const act = async (payload: Record<string, unknown>, done: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await adminFetch("/api/admin/users", { method: "POST", body: JSON.stringify(payload) });
+      setNotice(done);
+      await load();
+      setTimeout(() => setNotice(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const flash = (text: string) => {
+    void navigator.clipboard?.writeText(text);
+    setNotice(`Mot de passe copié — colle-le en toute sécurité au salarié.`);
+    setTimeout(() => setNotice(null), 4000);
+  };
+
+  return (
+    <section className="mt-6 grid gap-4 lg:grid-cols-2">
+      {error && (
+        <p className="rounded-2xl border-2 border-tomato/30 bg-tomato/5 p-3 text-sm font-semibold text-tomato-deep lg:col-span-2" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="rounded-2xl border-2 border-olive/30 bg-olive/10 p-3 text-sm font-semibold text-olive lg:col-span-2" role="status">
+          ✓ {notice}
+        </p>
+      )}
+
+      {/* Création */}
+      <form
+        className="rounded-3xl border border-ink/10 bg-white p-6"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act({ action: "create", email, password, role, label }, `Compte créé pour ${email}.`).then(() => {
+            setEmail("");
+            setPassword("");
+            setLabel("");
+            setRole("staff");
+          });
+        }}
+      >
+        <h2 className="font-display text-lg font-black">Créer un compte</h2>
+        <p className="mt-1 text-xs text-ink/50">
+          Le compte est actif immédiatement. Communique le mot de passe en personne —
+          il n'y a pas d'email d'activation.
+        </p>
+        <label className="mt-4 block text-sm font-bold">
+          Email
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-xl border-2 border-ink/12 px-3 py-2"
+            placeholder="sarah@exemple.fr"
+          />
+        </label>
+        <label className="mt-3 block text-sm font-bold">
+          Mot de passe (8 caractères min.)
+          <div className="mt-1 flex gap-2">
+            <input
+              type="text"
+              required
+              minLength={8}
+              maxLength={64}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border-2 border-ink/12 px-3 py-2 font-mono"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => flash(genPassword())}
+              className="btn-outline btn-sm shrink-0"
+              title="Générer et copier un mot de passe solide"
+            >
+              🎲 Générer
+            </button>
+          </div>
+        </label>
+        <label className="mt-3 block text-sm font-bold">
+          Rôle
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as "staff" | "admin")}
+            className="mt-1 w-full rounded-xl border-2 border-ink/12 px-3 py-2"
+          >
+            <option value="staff">Équipe — commandes et statuts uniquement</option>
+            <option value="admin">Admin — tout, comme le gérant</option>
+          </select>
+        </label>
+        <label className="mt-3 block text-sm font-bold">
+          Nom / précision (facultatif)
+          <input
+            type="text"
+            value={label}
+            maxLength={60}
+            onChange={(e) => setLabel(e.target.value)}
+            className="mt-1 w-full rounded-xl border-2 border-ink/12 px-3 py-2"
+            placeholder="Sarah — cuisine"
+          />
+        </label>
+        <button type="submit" disabled={busy} className="btn-primary mt-4 w-full disabled:opacity-50">
+          {busy ? "Création…" : "Créer le compte"}
+        </button>
+      </form>
+
+      {/* Liste */}
+      <div className="rounded-3xl border border-ink/10 bg-white p-6">
+        <h2 className="font-display text-lg font-black">Comptes de l'équipe</h2>
+        {users === null ? (
+          <p className="mt-3 text-sm text-ink/50">Chargement…</p>
+        ) : users.length === 0 ? (
+          <p className="mt-3 text-sm text-ink/50">
+            Aucun compte supplémentaire. Le gérant se connecte avec son email allowlisté.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {users.map((u) => (
+              <li
+                key={u.email}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-ink/10 bg-cream/40 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-bold">
+                    {u.label || u.email}
+                    {u.label && <span className="ml-1.5 text-xs font-normal text-ink/50">{u.email}</span>}
+                  </p>
+                  <p className="text-xs text-ink/50">
+                    Créé le {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(u.created_at))}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold uppercase ${u.role === "admin" ? "bg-olive/15 text-olive" : "bg-sun/20 text-[#8a5b0a]"}`}>
+                    {u.role === "admin" ? "admin" : "équipe"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Supprimer le compte ${u.email} ? Le salarié ne pourra plus se connecter.`)) {
+                        void act({ action: "delete", email: u.email }, `Compte ${u.email} supprimé.`);
+                      }
+                    }}
+                    className="rounded-lg px-2 py-1 text-sm hover:bg-tomato/10"
+                    aria-label={`Supprimer le compte ${u.email}`}
+                    title="Supprimer"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-4 text-xs text-ink/50">
+          🔒 Rôle « équipe » : commandes, statuts et étiquettes — sans prix, chiffre
+          d'affaires, analytique, carte ni réglages. Rôle « admin » : accès complet.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** Mot de passe prononçable-ish : lettres + chiffres, sans caractères ambigus. */
+function genPassword(): string {
+  const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
+  const bytes = new Uint8Array(14);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => alphabet[b % alphabet.length]).join("");
 }
