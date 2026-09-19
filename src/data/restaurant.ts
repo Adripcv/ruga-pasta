@@ -264,13 +264,21 @@ export function getOpenStatus(now: Date = new Date()): OpenStatus | null {
   };
 }
 
-export const nav = [
-  { label: "Accueil", href: "#accueil" },
-  { label: "Notre carte", href: "#carte" },
-  { label: "Le concept", href: "#concept" },
-  { label: "Avis", href: "#avis" },
-  { label: "Nous trouver", href: "#trouver" },
-] as const;
+/**
+ * 📱 Navigation — sur téléphone, « Le concept » disparaît (site épuré demandé
+ * par le gérant : sur mobile on garde l'essentiel — commander, la carte, les
+ * avis, nous trouver). Desktop : les 5 entrées, comme avant.
+ */
+export function navItems(isMobile: boolean): { label: string; href: string }[] {
+  const all = [
+    { label: "Accueil", href: "#accueil" },
+    { label: "Notre carte", href: "#carte" },
+    { label: "Le concept", href: "#concept" },
+    { label: "Avis", href: "#avis" },
+    { label: "Nous trouver", href: "#trouver" },
+  ];
+  return isMobile ? all.filter((item) => item.href !== "#concept") : all;
+}
 
 export const hero = {
   titleTop: "LA PASTA,",
@@ -450,18 +458,22 @@ export const gallery = {
       alt: "Une box de pâtes Ruga Pasta dégustée sur la terrasse, rue Rifle Rafle",
       span: "col-span-2 lg:col-span-7 lg:row-span-2",
       ratio: "aspect-[4/3] lg:aspect-auto lg:h-full",
+      /** Sur mobile la galerie est réduite à 2 photos (site épuré). */
+      mobile: true,
     },
     {
       img: "/images/gal-devanture.webp",
       alt: "L’auvent rouge et la façade du Ruga Pasta à Aix-en-Provence",
       span: "lg:col-span-5",
       ratio: "aspect-[4/3]",
+      mobile: true,
     },
     {
       img: "/images/gal-terrasse.webp",
       alt: "Les boxes Ruga Pasta posées sur les tables en bois de la terrasse",
       span: "lg:col-span-5",
       ratio: "aspect-[4/3]",
+      mobile: false,
     },
   ],
 } as const;

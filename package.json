@@ -5,12 +5,17 @@
   "type": "module",
   "description": "Site vitrine premium — Ruga Pasta, Aix-en-Provence",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-api.mjs & vite",
+    "dev:web": "vite",
+    "dev:api": "node scripts/dev-api.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "preview:headers": "node scripts/serve-headers.mjs"
+    "preview:headers": "node scripts/serve-headers.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -18,12 +23,15 @@
     "@fontsource-variable/dm-sans": "^5.2.5",
     "@fontsource-variable/fraunces": "^5.2.5",
     "@tailwindcss/vite": "^4.1.7",
-    "@types/node": "^22.20.3",
+    "@types/node": "^22.20.4",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^10.0.5",
     "tailwindcss": "^4.1.7",
+    "tsx": "^4.23.13",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^5.0.1"
   }
 }

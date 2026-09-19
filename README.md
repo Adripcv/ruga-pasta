@@ -1,74 +1,124 @@
-# 🍝 Ruga Pasta — Site vitrine
+# 🍝 Ruga Pasta — Site vitrine + Click & Collect
 
-Site one-page premium pour **Ruga Pasta**, pasta bar italien à Aix-en-Provence.
+Site one-page premium pour **Ruga Pasta**, pasta bar italien à Aix-en-Provence —
+avec **commande en ligne (click & collect)**, dashboard gérant, et repli Uber Eats.
 
 ## Stack
 
-- **Vite + React 19 + TypeScript** — build 100 % statique, déployé sur Vercel (également compatible Netlify, OVH, IONOS…)
+- **Vite + React 19 + TypeScript** — 3 pages séparées (vitrine, tunnel de commande, dashboard)
 - **Tailwind CSS v4** — design system maison (crème / rouge tomate / vert olive / jaune soleil)
-- **Fraunces + DM Sans** auto-hébergées via Fontsource (aucune requête tierce au runtime)
-- Aucune librairie d'animation : IntersectionObserver maison, respect de `prefers-reduced-motion`
+- **Supabase** (Postgres + Auth) — base de données du click & collect
+- **Vercel Functions** (Node, signature Web standard) — API serveur dans `api/`
+- **Vitest** — tests de la logique métier (`npm test`)
+- Fraunces + DM Sans auto-hébergées ; aucune requête tierce au runtime
 
 ## Commandes
 
 ```bash
-npm install            # installer
-npm run dev            # serveur de développement
-npm run build          # build de production (dist/ + _headers + robots.txt + sitemap.xml)
-npm run preview        # prévisualiser le build
-npm run preview:headers # prévisualiser avec les en-têtes de sécurité appliqués
+npm install        # installer
+npm run dev        # tout-en-un : API de dev (port 8787) + Vite (port 5173)
+npm run dev:web    # Vite seul (le tunnel affichera « commande fermée » sans API)
+npm run dev:api    # API seule
+npm test           # tests de la logique métier (fuseau Paris, prix, statuts…)
+npm run build      # build de production (dist/ + _headers + robots.txt + sitemap.xml)
+npm run preview:headers  # prévisualiser le build avec les en-têtes de sécurité
 ```
 
-### 🚀 Déploiement Vercel
+### Mode démonstration (sans Supabase)
 
-Le site est en ligne sur **https://ruga-pasta.vercel.app** — chaque `git push` sur `main`
-redéploie automatiquement. `vercel.json` applique les **en-têtes de sécurité** (CSP,
-anti-clickjacking, nosniff…) et le cache : les fichiers `_headers` Netlify ne sont pas
-lus par Vercel. Les deux configs (`vercel.json` et la CSP générée dans `vite.config.ts`)
-doivent rester identiques — c'est vérifié au build.
+```bash
+DEV_MOCK_MENU=1 npm run dev:api
+```
 
-### Domaine de production (`SITE_URL`)
+Le tunnel fonctionne avec un menu en mémoire (aucune commande réelle enregistrée).
+Pratique pour le design — jamais activé en production (la variable n'existe pas sur Vercel).
 
-Les balises SEO (canonical, og:image, JSON-LD) et le sitemap exigent des URL **absolues**.
-Par défaut, le build utilise `https://ruga-pasta.vercel.app`. Pour un domaine personnel,
-copier `.env.example` en `.env` et renseigner `SITE_URL=https://mon-domaine.fr` avant le
-build (et ajouter le domaine dans Vercel → Settings → Domains).
+## 🚀 Déploiement Vercel
+
+En ligne sur **https://ruga-pasta.vercel.app** — chaque `git push` sur `main` redéploie.
+Les fonctions sous `api/` sont déployées automatiquement (runtime Node, export `{ fetch }`).
+
+### Variables d'environnement à définir dans Vercel (Settings → Environment Variables)
+
+| Variable | Rôle | Secret ? |
+|---|---|---|
+| `SUPABASE_URL` | URL du projet Supabase | non |
+| `SUPABASE_ANON_KEY` | Clé publique (RLS deny-all : ne donne accès à rien) | non |
+| `SUPABASE_SERVICE_ROLE_KEY` | Accès serveur complet | **OUI — jamais côté client** |
+| `RESEND_API_KEY` | Envoi des emails de notification (optionnel) | oui |
+| `RESEND_FROM` | Expéditeur (`Ruga Pasta <commande@domaine.fr>`) | non |
+| `ADMIN_EMAILS` | Emails autorisés à se connecter à `/admin`, séparés par des virgules | non |
+| `SITE_URL` | Domaine public (SEO) — défaut : `https://ruga-pasta.vercel.app` | non |
+
+Les mêmes variables vont dans `.env` local (copier `.env.example`).
+
+## 🗄️ Mise en place Supabase (pas à pas, ~10 minutes)
+
+1. Créer un compte sur [supabase.com](https://supabase.com) (gratuit) → **New project**
+   (nom : `ruga-pasta`, région : West EU, mot de passe DB à conserver).
+2. Ouvrir **SQL Editor → New query**, coller **tout** le contenu de
+   [`supabase/schema.sql`](supabase/schema.sql), puis **Run**. Crée tables, sécurité
+   RLS, fonction atomique de commande et menu initial.
+3. **Settings → API** : copier `Project URL`, `anon key` et `service_role key`
+   dans les variables Vercel + `.env` local.
+4. **Authentication → Providers → Email** : activé (par défaut).
+   **Authentication → Users → Add user** : créer le compte du gérant
+   (email + mot de passe). Cet email doit figurer dans `ADMIN_EMAILS`.
+5. Redéployer (un `git push` suffit) → ouvrir `https://…/admin`, se connecter,
+   onglet **Réglages** : activer « Commande en ligne ».
+
+### Emails (optionnel mais recommandé)
+
+Créer un compte [resend.com](https://resend.com) (gratuit jusqu'à 3 000 emails/mois),
+générer une clé API, la mettre dans `RESEND_API_KEY`. Avec le domaine Vercel par défaut,
+garder `RESEND_FROM="Ruga Pasta <onboarding@resend.dev>"`. Avec un domaine personnalisé
+vérifié chez Resend : `RESEND_FROM="Ruga Pasta <commande@mon-domaine.fr>"`.
+
+## 🏪 Guide gérant — `/admin`
+
+Connecté sur `/admin` (page non indexée), 4 onglets :
+
+- **Commandes** : la journée en cours, rafraîchie toutes les 30 s. Boutons
+  « Préparer → Prête ! → Récupérée » (ou « Annuler »). Le code `RUGA-XXXX` est ce que
+  le client présente au comptoir.
+- **Stats** : CA 7 jours, nombre de commandes, panier moyen, top ventes.
+- **Carte** : changer un prix (en centimes : 650 = 6,50 €), cocher « Rupture »
+  (masque l'article du tunnel immédiatement) ou désactiver une ligne.
+- **Réglages** : ouvrir/fermer la commande en ligne (avec message), capacité par
+  créneau, délai de préparation, jours de fermeture, email de notification.
+
+## 🔒 Sécurité (résumé)
+
+- **Prix recalculés côté serveur** depuis la base — le client n'envoie que des IDs ;
+  aucune falsification possible.
+- **RLS `deny-all`** : le navigateur ne parle jamais à Supabase ; tout passe par
+  l'API, qui valide et signe.
+- **Création atomique** : verrou par créneau en transaction SQL — deux clients sur le
+  dernier créneau, un seul gagne.
+- **Anti-spam** : honeypot, limites par téléphone (5/jour) et par empreinte IP
+  hachée + salée (10/h, 30/jour), idempotence des soumissions.
+- **Admin** : JWT vérifié par Supabase + allowlist email côté serveur (fail-closed),
+  rate-limit des connexions, transitions de statuts contrôlées par machine à états.
+- **CSP stricte** inchangée (`vercel.json` + `_headers`) : `connect-src 'self'` —
+  le front ne contacte que notre API.
 
 ## ⭐ Modifier les données du restaurant
 
-**Tout est centralisé dans [`src/data/restaurant.ts`](src/data/restaurant.ts)** :
-
-| Donnée | État |
+| Donnée | Où |
 |---|---|
-| Adresse, téléphone, note Google (4,8 · 25 avis), services, fourchette de prix (1–10 €/pers.) | ✅ Réels |
-| Carte (formules, box à composer, salade de la semaine, boissons, desserts) | ✅ **Réelle** — d'après le menu officiel fourni (scan : `public/images/carte-ruga-pasta.png`) |
-| `orderUrl` | ✅ **Uber Eats** — https://www.ubereats.com/fr/store/ruga-pasta/gvwuEThrT1CwvEOqixRvuw. Sur **téléphone**, le bouton ouvre l'application Uber Eats (`intent://` Android avec repli web ; iOS ouvre l'app via universal link). Sur ordinateur : site web, nouvel onglet. Remettre `null` pour revenir à l'appel téléphonique |
-| `hours` | ✅ **Réels** — lun.–sam. 11:00–21:00, dimanche fermé. Modifier le champ pour changer les horaires ; ils alimentent aussi le badge « Ouvert / Fermé » (`getOpenStatus`) |
-| Réseaux sociaux | Aucun compte officiel connu : `social` est vide volontairement |
-| Photos | ✅ **Réelles** — photos du restaurant (devanture, terrasse, boxes) dans `public/images/`. Origine : photos publiées sur la fiche Google Maps de Ruga Pasta. Pour en ajouter : déposer le fichier dans `public/images/` puis l'ajouter au tableau `gallery.photos` de `src/data/restaurant.ts` |
-| Photos produit (boxes) | ✅ **Réelles** — source : page Uber Eats officielle (`box-carbonara.webp`, `boxes-boutique.webp`), affichées dans la section carte |
-| Logo | ✅ **Officiel** — `logo-emblem.png` (navbar) et `logo-ruga.png` (footer), détourés du logo fourni ; `favicon.png` + `apple-touch-icon.png` dérivés |
+| Vitrine (adresse, horaires, carte affichée, avis, photos) | `src/data/restaurant.ts` |
+| **Carte du click & collect** (prix réels) | Dashboard → Carte, ou `supabase/schema.sql` (seed) |
+| Créneaux & capacité | Dashboard → Réglages |
 
-## SEO
+⚠️ La vitrine et la base sont deux sources : si un prix change, le modifier aux
+**deux endroits** (dashboard pour la commande en ligne, `restaurant.ts` pour l'affichage).
 
-- Title / meta description optimisés recherche locale, Open Graph
-- Données structurées **Schema.org Restaurant** (JSON-LD dans `index.html`) : adresse, téléphone, gamme de prix, **horaires d'ouverture** (`openingHoursSpecification`), note 4,8/25 avis, services, **OrderAction** vers Uber Eats (retrait ou livraison)
-- Hiérarchie H1→H3 sémantique, textes alternatifs descriptifs
+## SEO, accessibilité, RGPD
 
-## Accessibilité & performance
-
-- Skip-link, navigation clavier, focus visible, contrastes vérifiés, piège à focus dans la lightbox
-- Images WebP locales, lazy-loading, dimensions explicites
-- Animations désactivées si `prefers-reduced-motion`
-
-## Sécurité & RGPD
-
-- **CSP stricte** sans aucun script tiers : `vercel.json` (Vercel, production) et `dist/_headers`
-  (généré au build pour Netlify / Cloudflare Pages) portent la **même politique** —
-  anti-clickjacking, nosniff, Referrer-Policy, Permissions-Policy, COOP. Le JSON-LD est en
-  `application/ld+json` (non exécutable, donc exempté de `script-src`)
-- **Carte Google Maps à clic** : l'iframe Google n'est chargée qu'après une action du visiteur — aucun cookie ni requête tierce avant consentement (recommandation CNIL)
-- `npm run preview:headers` sert `dist/` avec les en-têtes de `_headers` appliqués, pour tester la CSP en local
+- JSON-LD Restaurant avec `OrderAction` vers `/commander.html`
+- Skip-link, navigation clavier, piège à focus, `prefers-reduced-motion`, zones tactiles ≥ 44 px
+- Collecte minimale (nom + téléphone), page `/confidentialite.html`, IP pseudonymisées
+- Carte Google chargée uniquement après clic (recommandation CNIL)
 
 ---
 

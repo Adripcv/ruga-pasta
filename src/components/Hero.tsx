@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { hero, orderLink, restaurant } from "../data/restaurant";
+import { hero, restaurant } from "../data/restaurant";
 import { prefersReducedMotion } from "../hooks/useReveal";
 import { Pin, Star } from "./icons";
 
@@ -16,6 +16,9 @@ export function Hero() {
   // pour ne jamais rogner la devanture.
   useEffect(() => {
     if (prefersReducedMotion()) return;
+    // Mobile épuré : pas de parallaxe sur téléphone (économies de calcul et
+    // de batterie, zéro décalage au scroll). Desktop uniquement.
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
 
     const isWide = () => window.matchMedia("(min-width: 1280px)").matches;
     let raf = 0;
@@ -116,10 +119,7 @@ export function Hero() {
           className="hero-in mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"
           style={{ "--d": `${STAGGER[3]}ms` } as React.CSSProperties}
         >
-          <a
-            {...orderLink()}
-            className="btn-primary text-base sm:text-sm"
-          >
+          <a href="/commander.html" className="btn-primary text-base sm:text-sm">
             Commander
           </a>
           <a href="#carte" className="btn-ghost text-base sm:text-sm">

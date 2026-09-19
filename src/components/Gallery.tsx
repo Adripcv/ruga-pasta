@@ -3,13 +3,17 @@ import { gallery } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { ChevronLeft, ChevronRight, X } from "./icons";
 
-export function Gallery() {
+export function Gallery({ isMobile }: { isMobile: boolean }) {
   const ref = useReveal<HTMLElement>();
   const [lightbox, setLightbox] = useState<number | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  const photos = gallery.photos;
+  // Site épuré sur téléphone : 2 photos au lieu de 3 (la lightbox et la
+  // navigation clavier s'adaptent automatiquement à la liste filtrée).
+  const photos = isMobile
+    ? gallery.photos.filter((photo) => photo.mobile)
+    : gallery.photos;
 
   const close = useCallback(() => {
     setLightbox(null);
@@ -116,7 +120,7 @@ export function Gallery() {
           </p>
         </div>
 
-        <div className="mt-12 grid auto-rows-[minmax(180px,auto)] grid-cols-2 gap-3.5 sm:gap-4 lg:grid-cols-12">
+        <div className="mt-8 grid auto-rows-[minmax(180px,auto)] grid-cols-2 gap-3.5 sm:gap-4 lg:mt-12 lg:grid-cols-12">
           {photos.map((photo, i) => (
             <figure
               key={photo.img + i}

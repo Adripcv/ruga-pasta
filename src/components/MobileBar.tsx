@@ -1,4 +1,4 @@
-import { orderLink, restaurant } from "../data/restaurant";
+import { restaurant } from "../data/restaurant";
 import { Phone, Pin, Star } from "./icons";
 
 /**
@@ -14,11 +14,8 @@ export function MobileBar() {
     >
       <div className="grid grid-cols-3 divide-x divide-ink/10">
         <a
-          {...orderLink()}
+          href="/commander.html"
           className="flex flex-col items-center gap-0.5 bg-tomato py-2.5 text-[11px] font-extrabold tracking-wider text-cream uppercase active:bg-tomato-deep"
-          {...(restaurant.orderUrl
-            ? {}
-            : { "aria-label": "Commander par téléphone au 04 42 23 37 08" })}
         >
           <Star className="h-4.5 w-4.5" />
           Commander

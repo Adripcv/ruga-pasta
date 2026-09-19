@@ -1,4 +1,4 @@
-import { menu, orderLink, restaurant } from "../data/restaurant";
+import { menu } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Arrow } from "./icons";
 
@@ -285,14 +285,8 @@ export function MenuSection() {
             {menu.fullMenuLabel}
             <Arrow />
           </a>
-          <a
-            {...orderLink()}
-            className="btn-primary w-full sm:w-auto"
-            {...(restaurant.orderUrl
-              ? {}
-              : { "aria-label": "Commander par téléphone au 04 42 23 37 08" })}
-          >
-            Commander{restaurant.orderSource ? ` sur ${restaurant.orderSource}` : ""}
+          <a href="/commander.html" className="btn-primary w-full sm:w-auto">
+            Commander en ligne
             <Arrow />
           </a>
         </div>

@@ -1,4 +1,5 @@
 import { useReveal } from "./hooks/useReveal";
+import { useIsMobile } from "./hooks/useIsMobile";
 import { Navbar } from "./components/Navbar";
 import { Hero } from "./components/Hero";
 import { Marquee } from "./components/Marquee";
@@ -16,6 +17,7 @@ import { BackToTop } from "./components/BackToTop";
 
 export default function App() {
   const ref = useReveal<HTMLDivElement>();
+  const isMobile = useIsMobile();
 
   return (
     <div ref={ref} className="min-h-screen bg-cream">
@@ -23,19 +25,22 @@ export default function App() {
         Aller au contenu
       </a>
       <ScrollProgress />
-      <Navbar />
+      <Navbar isMobile={isMobile} />
       <main id="contenu">
         <Hero />
-        <Marquee />
+        {/* Site épuré sur téléphone (demande du gérant) : les sections
+            décoratives disparaissent, l'essentiel reste — commander, la carte,
+            les avis, nous trouver. Desktop : tout est là, comme avant. */}
+        {!isMobile && <Marquee />}
         <About />
         <MenuSection />
-        <Concept />
-        <Gallery />
+        {!isMobile && <Concept />}
+        <Gallery isMobile={isMobile} />
         <Reviews />
         <OrderCta />
         <Location />
       </main>
-      <Footer />
+      <Footer isMobile={isMobile} />
       <MobileBar />
       <BackToTop />
     </div>

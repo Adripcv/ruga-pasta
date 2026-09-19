@@ -1,13 +1,9 @@
-import { orderLink, restaurant } from "../data/restaurant";
+import { navItems, restaurant } from "../data/restaurant";
 
-export function Footer() {
-  const links = [
-    { label: "Accueil", href: "#accueil" },
-    { label: "Carte", href: "#carte" },
-    { label: "Le concept", href: "#concept" },
-    { label: "Avis", href: "#avis" },
-    { label: "Nous trouver", href: "#trouver" },
-  ];
+export function Footer({ isMobile }: { isMobile: boolean }) {
+  // Même liste filtrée que la navigation principale (pas de « Le concept »
+  // sur téléphone, site épuré).
+  const links = navItems(isMobile);
 
   return (
     <footer className="paper-dark relative overflow-hidden bg-ink text-cream">
@@ -80,19 +76,23 @@ export function Footer() {
                 <li key={service}>{service}</li>
               ))}
             </ul>
-            {restaurant.orderUrl && (
-              <a
-                {...orderLink()}
-                className="mt-5 inline-flex items-center gap-2 rounded-full bg-tomato px-4 py-2 text-xs font-extrabold tracking-[0.12em] text-cream uppercase transition-colors hover:bg-tomato-deep"
-              >
-                ★ Commander sur {restaurant.orderSource}
-              </a>
-            )}
+            <a
+              href="/commander.html"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-tomato px-4 py-2 text-xs font-extrabold tracking-[0.12em] text-cream uppercase transition-colors hover:bg-tomato-deep"
+            >
+              ★ Commander en ligne
+            </a>
           </div>
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-cream/10 pt-6 text-xs text-cream/50 sm:flex-row">
           <p>© Ruga Pasta — Tous droits réservés.</p>
+          <a
+            href="/confidentialite.html"
+            className="py-2 transition-colors hover:text-cream"
+          >
+            Confidentialité
+          </a>
           <p className="em-italic text-sm text-cream/60">
             Prends une fourchette. 🍝
           </p>

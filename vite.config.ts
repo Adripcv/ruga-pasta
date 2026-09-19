@@ -163,6 +163,26 @@ export default defineConfig(({ mode }) => {
       // Les sources ne sont pas publiées : elles exposent le code sans intérêt
       // pour l'utilisateur (et alourdissent le déploiement).
       sourcemap: false,
+      // Pages séparées : le site vitrine ne télécharge pas le code du tunnel
+      // de commande (et inversement) — chaque page charge ce qu'elle utilise.
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, "index.html"),
+          order: resolve(__dirname, "commander.html"),
+          admin: resolve(__dirname, "admin.html"),
+        },
+      },
+    },
+    server: {
+      proxy: {
+        // Le serveur d'API de développement tourne à côté de Vite (même
+        // handlers que la prod Vercel) : le tunnel et le dashboard marchent
+        // en local sans configuration.
+        "/api": {
+          target: "http://localhost:8787",
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

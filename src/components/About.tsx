@@ -1,4 +1,4 @@
-import { about, orderLink } from "../data/restaurant";
+import { about } from "../data/restaurant";
 import { useReveal } from "../hooks/useReveal";
 import { Arrow } from "./icons";
 
@@ -33,7 +33,9 @@ export function About() {
               height="825"
             />
           </div>
-          <div className="reveal-img mt-4 grid grid-cols-2 gap-4">
+          {/* Mobile épuré : la grande photo suffit, les deux petites ne
+              s'affichent qu'à partir de `lg`. */}
+          <div className="reveal-img mt-4 hidden grid-cols-2 gap-4 lg:grid">
             <div className="overflow-hidden rounded-3xl shadow-[0_20px_40px_-24px_rgba(43,26,16,0.4)]">
               <img
                 src="/images/about-box.webp"
@@ -95,7 +97,10 @@ export function About() {
             {about.paragraphs[0]}
           </p>
 
-          <ul className="mt-6 flex flex-wrap gap-2.5" aria-label="Services">
+          <ul
+            className="mt-6 hidden flex-wrap gap-2.5 lg:flex"
+            aria-label="Services"
+          >
             {about.chips.map((chip) => (
               <li key={chip} className="sticker-olive">
                 {chip}
@@ -104,7 +109,7 @@ export function About() {
           </ul>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a {...orderLink()} className="btn-primary">
+            <a href="/commander.html" className="btn-primary">
               Commander
               <Arrow />
             </a>

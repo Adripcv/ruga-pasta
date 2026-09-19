@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { nav, orderLink, restaurant } from "../data/restaurant";
+import { navItems } from "../data/restaurant";
 import { useScrollSpy } from "../hooks/useScrollSpy";
 import { Burger } from "./icons";
 
-export function Navbar() {
+export function Navbar({ isMobile }: { isMobile: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  // Sur téléphone, « Le concept » est masqué (site épuré) : la navigation
+  // desktop et le menu mobile utilisent la même liste filtrée.
+  const nav = navItems(isMobile);
   const active = useScrollSpy(nav.map((item) => item.href.slice(1)));
 
   useEffect(() => {
@@ -120,11 +123,7 @@ export function Navbar() {
         </ul>
 
         <div className="flex items-center gap-2">
-          <a
-            {...orderLink()}
-            className="btn-primary btn-sm hidden sm:inline-flex"
-            {...(restaurant.orderUrl ? {} : { "aria-label": "Commander par téléphone au 04 42 23 37 08" })}
-          >
+          <a href="/commander.html" className="btn-primary btn-sm hidden sm:inline-flex">
             Commander
           </a>
           <button
@@ -169,11 +168,11 @@ export function Navbar() {
             ))}
             <li className="pt-2">
               <a
-                {...orderLink()}
+                href="/commander.html"
                 onClick={() => setOpen(false)}
                 className="btn-primary w-full"
               >
-                Commander{restaurant.orderSource ? ` sur ${restaurant.orderSource}` : ""}
+                Commander en ligne
               </a>
             </li>
           </ul>
