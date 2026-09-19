@@ -56,7 +56,6 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   close_minutes: 1260,
   capacity_per_slot: 6,
   closed_weekdays: [0],
-  admin_notify_email: null,
 };
 
 /** Lit les réglages ; retombe sur les défauts (commande fermée) si absents. */
@@ -77,7 +76,6 @@ export async function getSettings(): Promise<StoreSettings> {
     close_minutes: data.close_minutes,
     capacity_per_slot: data.capacity_per_slot,
     closed_weekdays: data.closed_weekdays ?? [],
-    admin_notify_email: data.admin_notify_email ?? null,
   };
 }
 

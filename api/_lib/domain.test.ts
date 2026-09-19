@@ -34,7 +34,6 @@ const SETTINGS: StoreSettings = {
   close_minutes: 21 * 60,
   capacity_per_slot: 6,
   closed_weekdays: [0], // dimanche
-  admin_notify_email: null,
 };
 
 const menu = (over: Partial<MenuNode>): MenuNode => ({

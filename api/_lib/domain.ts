@@ -55,8 +55,6 @@ export type StoreSettings = {
   capacity_per_slot: number;
   /** Jours de fermeture hebdomadaire — index JS of `Date.getDay()` (0 = dimanche). */
   closed_weekdays: number[];
-  /** Email de notification du gérant (facultatif, lu pour les emails). */
-  admin_notify_email: string | null;
 };
 
 export type PriceResult =

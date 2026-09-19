@@ -60,7 +60,9 @@ Valeurs (Supabase → Project Settings → API) :
 | `ADMIN_EMAILS` | Emails gérant séparés par des virgules |
 | `ADMIN_JWT_SECRET` | Chaîne aléatoire (ex. `openssl rand -hex 32`) |
 
-Optionnel (emails automatiques au gérant) : `RESEND_API_KEY` + domaine vérifié.
+Pas de notification email : la cuisine suit les commandes en temps réel dans le dashboard
+et imprime les étiquettes. À terme, l'appli de gestion des commandes du restaurant sera
+branchée directement sur la base Supabase (voir « Cuisine & intégrations » dans les Réglages).
 
 ## 5. Vérifier que tout marche
 
@@ -83,11 +85,11 @@ dans `ADMIN_EMAILS` peut se connecter, même s'il a un compte Supabase valide).
 
 | Onglet | Ce que tu y fais |
 |---|---|
-| 🍽️ **Service** | Le jour en direct : bandeau KPI (à traiter / prêtes / commandes / CA), cartes commandes avec transitions `Nouvelle → Préparation → Prête → Récupérée`, recherche code/nom/téléphone, filtre par statut, export **CSV** (tableur). Rafraîchissement auto toutes les 30 s + bouton. |
+| 🍽️ **Service** | Le jour en direct : bandeau KPI (à traiter / prêtes / commandes / CA), cartes commandes avec transitions `Nouvelle → Préparation → Prête → Récupérée`, **impression d'étiquettes cuisine** (à l'unité ou tout le jour d'un coup), recherche code/nom/téléphone, filtre par statut, export **CSV** (tableur). Rafraîchissement auto toutes les 30 s + bouton. |
 | 📈 **Analytique** | Période 7/14/30/90 j : 4 KPI avec **tendances vs période précédente** et sparklines, **courbe CA/commandes** (bascule), **affluence par heure de retrait** (barres), **répartition des statuts** (donut), **top produits** avec barres de progression. |
 | 🗂️ **Historique** | Les mêmes listes de commandes sur n'importe quel jour passé (sélecteur de date), mêmes filtres/recherche/CSV. |
 | 🧾 **Carte** | Arbre complet de la carte : **prix éditable en ligne** (en centimes), rupture par article ou section entière, activation/masquage, **renommer, réordonner (↑↓), ajouter, supprimer** (refusé si des commandes y réfèrent — masque plutôt). Visible immédiatement sur le tunnel. |
-| ⚙️ **Réglages** | Interrupteur **ouverture/fermeture** de la commande + message personnalisé, durée des créneaux, capacité par créneau, délai de préparation, heures d'ouverture/fermeture avec **aperçu live des créneaux**, jours de fermeture hebdomadaire, email de notification. |
+| ⚙️ **Réglages** | Interrupteur **ouverture/fermeture** de la commande + message personnalisé, durée des créneaux, capacité par créneau, délai de préparation, heures d'ouverture/fermeture avec **aperçu live des créneaux**, jours de fermeture hebdomadaire. |
 
 ### Bon à savoir
 
@@ -99,6 +101,15 @@ dans `ADMIN_EMAILS` peut se connecter, même s'il a un compte Supabase valide).
 
 ---
 
+## Intégration cuisine (à venir)
+
+La cuisine du restaurant utilise déjà sa propre appli de gestion des commandes. Le plan :
+brancher cette appli directement sur la base Supabase (lecture de la table `orders` +
+insertion automatique des nouvelles commandes) — pas d'email par commande, pas de double
+saisie. En attendant, le dashboard fait office d'écran cuisine : onglet **Service** en
+temps réel + bouton 🖨️ pour imprimer l'étiquette de chaque commande (code, créneau en
+grand, articles, note client) ou 🖨️ **Étiquettes** pour la journée complète.
+
 ## Dépannage
 
 | Symptôme | Cause probable | Remède |
@@ -108,9 +119,4 @@ dans `ADMIN_EMAILS` peut se connecter, même s'il a un compte Supabase valide).
 | « Commande fermée » alors que les réglages disent ouverte | `ordering_enabled=false` en base | Dashboard → Réglages → interrupteur |
 | Déploiement Vercel en erreur « 12 functions » | Trop de fonctions serverless (plan Hobby) | Vérifie qu'aucun fichier superflu dans `api/` |
 | Prix modifié ne s'affiche pas | Cache du navigateur | Recharge (Ctrl+Shift+R) — l'API est en `no-store` |
-
-## Emails automatiques (optionnel)
-
-Par défaut, aucune notification email. Pour l'activer : compte [Resend](https://resend.com)
-(clé API), vérifie un domaine d'envoi, ajoute `RESEND_API_KEY` sur Vercel. Le handler envoie
-alors le détail de chaque commande au `admin_notify_email` (Réglages).
+| La fenêtre d'étiquette ne s'ouvre pas | Bloqueur de pop-ups | Autorise les pop-ups pour le site |

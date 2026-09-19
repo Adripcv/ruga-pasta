@@ -53,9 +53,13 @@ create table if not exists public.store_settings (
   close_minutes       integer not null default 1260, -- 21:00
   capacity_per_slot   integer not null default 6 check (capacity_per_slot between 1 and 100),
   closed_weekdays     integer[] not null default '{0}', -- 0 = dimanche
-  admin_notify_email  text,          -- email du gérant pour les notifications
   updated_at          timestamptz not null default now()
 );
+
+-- Notifications email supprimées : la cuisine suit les commandes dans le
+-- dashboard (onglet Service) ; l'appli de gestion sera branchée directement
+-- sur la base. Colonne obsolète retirée si elle existe encore.
+alter table public.store_settings drop column if exists admin_notify_email;
 
 -- ---------------------------------------------------------------------------
 -- COMMANDES
@@ -252,10 +256,17 @@ begin
   end if;
 
   -- (6) Code commande lisible, unique en base (collision → retry côté appelant).
+  -- Alphabet strict sans 0/1/O/I/L : dictable au téléphone sans ambiguïté
+  -- (aligné sur CODE_ALPHABET de api/_lib/domain.ts).
   loop
     v_code := 'RUGA-' || substr(
-      translate(encode(gen_random_bytes(8), 'base64'), '+=/', 'AAA'), 1, 4);
-    v_code := upper(regexp_replace(v_code, '[01ILO]', 'g', 'i'));
+      translate(encode(gen_random_bytes(8), 'base64'), '+/0189OILo', 'AB2345GJKN'), 1, 4);
+    v_code := upper(regexp_replace(v_code, '[^2-9A-HJ-NP-Z]', 'g', 'i'));
+    -- Complète si des caractères ont été écartés par le filtre ci-dessus.
+    while length(v_code) < 9 loop
+      v_code := v_code || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + floor(random() * 31)::int, 1);
+    end loop;
+    v_code := substr(v_code, 1, 9);
     exit when not exists (select 1 from public.orders where code = v_code);
   end loop;
 

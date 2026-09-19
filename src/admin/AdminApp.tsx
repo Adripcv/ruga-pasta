@@ -35,6 +35,9 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
     if (res.status === 401) {
       accessToken = null;
       setSession(null);
+      // Prévient l'UI (toutes les vues affichent le login, les erreurs 401
+      // polluantes sont éteintes) et re-synchronise l'état React.
+      window.dispatchEvent(new Event("ruga-admin-unauthorized"));
     }
     const error = new Error(err.message || err.error || `HTTP ${res.status}`);
     (error as Error & { status?: number }).status = res.status;
@@ -112,7 +115,6 @@ type Settings = {
   close_minutes: number;
   capacity_per_slot: number;
   closed_weekdays: number[];
-  admin_notify_email: string | null;
 };
 
 const STATUS_LABELS: Record<OrderRow["status"], string> = {
@@ -279,10 +281,12 @@ function OrderCard({
   order,
   onStatus,
   busy,
+  onPrint,
 }: {
   order: OrderRow;
   onStatus: (code: string, status: OrderRow["status"]) => void;
   busy: boolean;
+  onPrint: (order: OrderRow) => void;
 }) {
   const when = new Intl.DateTimeFormat("fr-FR", {
     hour: "2-digit",
@@ -358,6 +362,15 @@ function OrderCard({
               {ACTION_LABELS[next]}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => onPrint(order)}
+            className="rounded-full border-2 border-ink/15 px-3 py-2 text-xs font-extrabold text-ink/70 uppercase transition-colors hover:border-ink hover:text-ink"
+            title="Imprimer l'étiquette cuisine"
+            aria-label={`Imprimer l'étiquette cuisine de ${order.code}`}
+          >
+            🖨️ Étiquette
+          </button>
         </div>
       </div>
     </article>
@@ -905,7 +918,6 @@ function SettingsView({
   settings: Settings;
   setSettings: (s: Settings) => void;
 }) {
-  const [notifyEmail, setNotifyEmail] = useState(settings.admin_notify_email ?? "");
   const patch = async (payload: Record<string, unknown>) => {
     await adminFetch("/api/admin/settings", { method: "POST", body: JSON.stringify(payload) });
   };
@@ -1079,27 +1091,18 @@ function SettingsView({
         </div>
       </div>
 
-      {/* Notification */}
+      {/* Intégration future : l'appli de gestion cuisine du restaurant lira les
+          commandes directement (base Supabase ou export). Pas d'email par
+          commande : la cuisine voit tout ici, en temps réel. */}
       <div className="rounded-3xl border border-ink/10 bg-white p-6 md:col-span-2">
-        <h2 className="font-display text-lg font-black">Notification nouvelle commande</h2>
-        <label className="mt-3 block text-sm font-bold">
-          Email du gérant
-          <input
-            type="email"
-            value={notifyEmail}
-            onChange={(e) => setNotifyEmail(e.target.value)}
-            onBlur={() => {
-              if (notifyEmail.trim() !== (settings.admin_notify_email ?? "")) {
-                setSettings({ ...settings, admin_notify_email: notifyEmail.trim() || null });
-                void patch({ admin_notify_email: notifyEmail.trim() });
-              }
-            }}
-            className="mt-1.5 w-full max-w-sm rounded-xl border-2 border-ink/12 px-3 py-2"
-            placeholder="gerant@ruga-pasta.fr"
-          />
-        </label>
+        <h2 className="font-display text-lg font-black">Cuisine & intégrations</h2>
+        <p className="mt-2 text-sm text-ink/70">
+          Les commandes arrivent <strong>en temps réel</strong> dans l'onglet <strong>Service</strong> —
+          imprime l'étiquette de chaque commande avec le bouton 🖨️ pour l'accrocher au passe.
+        </p>
         <p className="mt-2 text-xs text-ink/50">
-          Reçoit un email avec le détail à chaque commande (nécessite RESEND_API_KEY côté Vercel).
+          🔮 Prévu : connexion directe entre ce site et l'appli de gestion des commandes déjà
+          utilisée en cuisine (les commandes s'y ajouteront automatiquement, sans email ni saisie).
         </p>
       </div>
     </section>
@@ -1128,6 +1131,13 @@ export function AdminApp() {
     accessToken = null;
     setSession(null);
     setEmail(null);
+  }, []);
+
+  // Expiration du jeton pendant une session (401) : retour au login propre.
+  useEffect(() => {
+    const onUnauthorized = () => setEmail(null);
+    window.addEventListener("ruga-admin-unauthorized", onUnauthorized);
+    return () => window.removeEventListener("ruga-admin-unauthorized", onUnauthorized);
   }, []);
 
   const loadOrders = useCallback(async () => {
@@ -1237,6 +1247,14 @@ export function AdminApp() {
 
   const isServiceView = tab === "orders";
   const isHistoryView = tab === "history";
+
+  const printDay = () => {
+    if (!filteredOrders?.length) return;
+    const withItems = filteredOrders.filter((o) => o.status !== "cancelled");
+    withItems.forEach((o, i) => {
+      setTimeout(() => printLabel(o), i * 400);
+    });
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6">
@@ -1369,6 +1387,15 @@ export function AdminApp() {
             >
               ⬇ CSV
             </button>
+            <button
+              type="button"
+              onClick={printDay}
+              disabled={!filteredOrders?.length}
+              className="btn-outline btn-sm disabled:opacity-40"
+              title="Imprimer les étiquettes cuisine des commandes non annulées"
+            >
+              🖨️ Étiquettes
+            </button>
           </div>
 
           <p className="mt-3 text-xs text-ink/45">
@@ -1382,7 +1409,7 @@ export function AdminApp() {
               <p className="text-sm text-ink/50">Chargement…</p>
             ) : filteredOrders && filteredOrders.length > 0 ? (
               filteredOrders.map((order) => (
-                <OrderCard key={order.code} order={order} onStatus={changeStatus} busy={busy} />
+                <OrderCard key={order.code} order={order} onStatus={changeStatus} busy={busy} onPrint={printLabel} />
               ))
             ) : (
               <p className="rounded-2xl bg-cream-2 p-5 text-sm text-ink/60 md:col-span-2">
@@ -1435,4 +1462,77 @@ function SettingsPlaceholder({ onRetry }: { onRetry: () => void }) {
   }
   if (!settings) return <p className="mt-6 text-sm text-ink/50">Chargement…</p>;
   return <SettingsView settings={settings} setSettings={setSettings} />;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Étiquette cuisine — impression via une fenêtre dédiée (styles isolés)      */
+/* -------------------------------------------------------------------------- */
+
+function printLabel(order: OrderRow) {
+  const when = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(order.pickup_at));
+  const time = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(order.pickup_at));
+
+  const lines = order.order_items
+    .map(
+      (item) => `<tr>
+        <td class="qty">${item.qty}×</td>
+        <td>${item.path.filter(Boolean).join(" · ")}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Étiquette ${order.code}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; padding: 10mm; background: #fff; }
+  .label { width: 100mm; border: 2px solid #000; border-radius: 4mm; padding: 6mm; }
+  .code { font-size: 30pt; font-weight: 900; letter-spacing: 1px; }
+  .when { margin-top: 1mm; font-size: 12pt; color: #444; }
+  .slot { margin-top: 4mm; font-size: 44pt; font-weight: 900; text-align: center;
+          background: #000; color: #fff; border-radius: 3mm; padding: 2mm 0; }
+  table { width: 100%; margin-top: 5mm; border-collapse: collapse; }
+  td { padding: 2.5mm 0; border-bottom: 1px dashed #999; font-size: 13pt; vertical-align: top; }
+  td.qty { font-weight: 900; width: 12mm; white-space: nowrap; }
+  .note { margin-top: 4mm; font-size: 12pt; font-weight: 700; background: #fff3c4;
+          border: 1px solid #d9b300; border-radius: 2mm; padding: 2.5mm 3mm; }
+  .foot { margin-top: 5mm; font-size: 9pt; color: #666; text-align: center; }
+  @media print { body { padding: 0; } }  /* l'étiquette EST la page */
+</style>
+</head>
+<body>
+  <div class="label">
+    <div class="code">${order.code}</div>
+    <div class="when">${when} · ${order.customer_name}</div>
+    <div class="slot">${time}</div>
+    <table>${lines}</table>
+    ${order.note ? `<div class="note">📝 ${order.note.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>` : ""}
+    <div class="foot">Ruga Pasta · Click &amp; Collect</div>
+  </div>
+  <script>
+    window.onload = function () {
+      window.focus();
+      window.print();
+    };
+  </${"script"}>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank", "width=480,height=640");
+  if (!win) {
+    window.alert("Le navigateur a bloqué la fenêtre d'impression. Autorise les pop-ups pour ce site.");
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
 }

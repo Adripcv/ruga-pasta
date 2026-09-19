@@ -12,7 +12,6 @@
  */
 import {
   canTransition,
-  formatEuros,
   generateOrderCode,
   isDateISO,
   isOrderStatus,
@@ -25,7 +24,6 @@ import {
   validateCustomer,
   type CartLineInput,
   type MenuNode,
-  type PricedLine,
   type StoreSettings,
 } from "./domain.js";
 import {
@@ -258,18 +256,6 @@ export async function handleCreateOrder(
       .then(null, () => undefined);
   }
 
-  // Emails : hors chemin critique — une panne Resend ne doit pas invalider
-  // une commande déjà validée par la base.
-  void notifyNewOrder({
-    code: data.code,
-    name: customer.name,
-    phone: customer.phone,
-    pickupMs,
-    total_cents: data.total_cents,
-    lines: priced.lines,
-    note,
-  }).catch((err) => console.error("notifyNewOrder:", err));
-
   return ok({
     ok: true,
     code: data.code,
@@ -297,7 +283,6 @@ export async function handleSlots(
         close_minutes: 1260,
         capacity_per_slot: 6,
         closed_weekdays: [0],
-        admin_notify_email: null,
       };
       const now = new Date();
       const slots = slotsForDate(settings, dateParam, now) ?? [];
@@ -464,75 +449,10 @@ export async function handleMenu(): Promise<ApiResponse> {
 }
 
 // ---------------------------------------------------------------------------
-// Emails (Resend) — le gérant reçoit chaque commande. Le client, lui, n'a
-// pas d'email à donner (nom + téléphone seulement, RGPD minimal) : sa
-// confirmation est l'écran de fin de tunnel avec son numéro de commande.
+// (Intégration cuisine à venir : l'appli de gestion des commandes du
+// restaurant lira directement la base — pas d'email par commande. La
+// cuisine suit tout en temps réel depuis l'onglet Service du dashboard.)
 // ---------------------------------------------------------------------------
-
-type OrderNotification = {
-  code: string;
-  name: string;
-  phone: string;
-  pickupMs: number;
-  total_cents: number;
-  lines: PricedLine[];
-  note?: string;
-};
-
-function pickupLabel(pickupMs: number): string {
-  return new Intl.DateTimeFormat("fr-FR", {
-    timeZone: "Europe/Paris",
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(pickupMs));
-}
-
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM ?? "Ruga Pasta <onboarding@resend.dev>";
-  if (!key) {
-    console.log(`[email sauté — pas de RESEND_API_KEY] à=${to} sujet=${subject}`);
-    return;
-  }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from, to, subject, html }),
-  });
-  if (!res.ok) {
-    throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  }
-}
-
-async function notifyNewOrder(order: OrderNotification): Promise<void> {
-  const settings = await getSettings();
-  const lines = order.lines
-    .map((l) => `<li>${l.qty} × ${l.path.join(" › ")} — ${formatEuros(l.line_cents)}</li>`)
-    .join("");
-  const noteHtml = order.note
-    ? `<p><em>Note : ${order.note.replace(/</g, "&lt;")}</em></p>`
-    : "";
-
-  // 1. Le gérant.
-  const to = settings.admin_notify_email ?? process.env.ADMIN_EMAILS?.split(",")[0];
-  if (to) {
-    await sendEmail(
-      to,
-      `🍽️ Commande ${order.code} — ${formatEuros(order.total_cents)} — retrait ${pickupLabel(order.pickupMs)}`,
-      `<h2>Commande ${order.code}</h2>
-       <p><strong>${order.name}</strong> — <a href="tel:${order.phone}">${order.phone}</a></p>
-       <p>Retrait : <strong>${pickupLabel(order.pickupMs)}</strong></p>
-       <ul>${lines}</ul>
-       <p><strong>Total : ${formatEuros(order.total_cents)}</strong> — à régler en boutique au retrait.</p>
-       ${noteHtml}`,
-    );
-  }
-
-}
 
 // ---------------------------------------------------------------------------
 // ADMIN — dashboard gérant (auth vérifiée côté serveur)
@@ -747,7 +667,10 @@ export async function handleAdminUpdateOrder(
   if (
     !payload ||
     typeof payload.code !== "string" ||
-    !/^RUGA-[2-9A-HJ-NP-Z]{4}$/.test(payload.code) ||
+    // Alphabets tolérés : le schéma SQL strict (sans 0/1/O/I/L) ET l'ancienne
+    // fonction create_order encore présente dans certaines bases (base64 →
+    // A-Z0-9). La base reste l'autorité sur le format réel des codes.
+    !/^RUGA-[A-Z0-9]{4}$/.test(payload.code) ||
     !isOrderStatus(payload.status)
   ) {
     return bad(400, "BAD_PAYLOAD");
@@ -1036,7 +959,7 @@ export async function handleAdminSettingsUpdate(
       | "capacity_per_slot"
       | "closed_weekdays"
     >
-  > & { admin_notify_email?: unknown } | null;
+  > | null;
 
   if (!payload || typeof payload !== "object") return bad(400, "BAD_PAYLOAD");
 
@@ -1079,12 +1002,6 @@ export async function handleAdminSettingsUpdate(
       return bad(400, "BAD_SETTING");
     }
     patch.closed_weekdays = payload.closed_weekdays;
-  }
-  if (payload.admin_notify_email !== undefined) {
-    if (typeof payload.admin_notify_email !== "string" || payload.admin_notify_email.length > 120) {
-      return bad(400, "BAD_SETTING");
-    }
-    patch.admin_notify_email = payload.admin_notify_email.trim() || null;
   }
 
   const { error } = await serviceRole()
