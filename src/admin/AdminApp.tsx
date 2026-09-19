@@ -1142,7 +1142,7 @@ function SettingsView({
 /*  App principale                                                            */
 /* -------------------------------------------------------------------------- */
 
-type Tab = "orders" | "analytics" | "history" | "menu" | "settings" | "team";
+type Tab = "orders" | "analytics" | "menu" | "settings" | "team";
 
 export function AdminApp() {
   const [session, setSessionState] = useState<SessionInfo | null>(getSession());
@@ -1185,7 +1185,7 @@ export function AdminApp() {
 
   // Commandes du jour — rafraîchies toutes les 30 s.
   useEffect(() => {
-    if (!session || (tab !== "orders" && tab !== "history")) return;
+    if (!session || tab !== "orders") return;
     let cancelled = false;
     const check = () => {
       if (!cancelled) void loadOrders();
@@ -1284,12 +1284,12 @@ export function AdminApp() {
   if (!session) return <LoginView onLoggedIn={setSessionState} />;
 
   // Onglets selon le rôle : le staff ne voit que le service (commandes).
+  // L'historique vit dans Service via le sélecteur de date (moins d'onglets).
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "orders", label: "Service", icon: "🍽️" },
     ...(isAdmin
       ? ([
           { key: "analytics", label: "Analytique", icon: "📈" },
-          { key: "history", label: "Historique", icon: "🗂️" },
           { key: "menu", label: "Carte", icon: "🧾" },
           { key: "settings", label: "Réglages", icon: "⚙️" },
           { key: "team", label: "Équipe", icon: "👥" },
@@ -1298,7 +1298,7 @@ export function AdminApp() {
   ];
 
   const isServiceView = tab === "orders";
-  const isHistoryView = tab === "history";
+  const isPastDay = day !== parisToday();
 
   const printDay = () => {
     if (!filteredOrders?.length) return;
@@ -1309,7 +1309,7 @@ export function AdminApp() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 pb-24 pt-6 sm:px-6 md:pb-16">
       {/* En-tête */}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -1339,19 +1339,27 @@ export function AdminApp() {
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="mt-5 flex gap-1.5 overflow-x-auto" aria-label="Sections du dashboard">
+      {/* Navigation — en haut sur desktop, barre fixe en bas sur téléphone
+          (cible tactile 44 px, safe-area iPhone) */}
+      <nav
+        aria-label="Sections du dashboard"
+        className="mt-5 flex gap-1.5 overflow-x-auto
+          max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:mt-0
+          max-md:justify-around max-md:border-t max-md:border-ink/10 max-md:bg-cream
+          max-md:px-1 max-md:pb-[env(safe-area-inset-bottom)] max-md:pt-1.5"
+      >
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
             aria-current={tab === t.key ? "page" : undefined}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm font-extrabold uppercase tracking-wide transition-colors ${
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-extrabold uppercase tracking-wide transition-colors
+              max-md:flex max-md:min-h-[48px] max-md:min-w-[64px] max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-0.5 max-md:rounded-2xl max-md:px-3 max-md:py-1.5 max-md:text-[10px] ${
               tab === t.key ? "bg-ink text-cream" : "bg-ink/5 text-ink/60 hover:bg-ink/10"
             }`}
           >
-            <span aria-hidden="true" className="mr-1.5">{t.icon}</span>
+            <span aria-hidden="true" className="mr-1.5 text-base max-md:mr-0 max-md:text-xl">{t.icon}</span>
             {t.label}
             {t.key === "orders" && dayOrders && dayOrders.newCount > 0 && (
               <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-tomato text-[11px] text-cream">
@@ -1368,9 +1376,10 @@ export function AdminApp() {
         </p>
       )}
 
-      {/* Bandeau service (jour courant uniquement) */}
+      {/* Bandeau service (jour courant uniquement) — 4 colonnes desktop,
+          2×2 sur téléphone */}
       {isServiceView && dayOrders && day === parisToday() && (
-        <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-2xl border-2 border-tomato/30 bg-tomato/[0.04] p-4">
             <p className="text-xs font-extrabold tracking-wide text-ink/50 uppercase">À traiter</p>
             <p className="font-display text-3xl font-black text-tomato">{dayOrders.newCount}</p>
@@ -1392,9 +1401,10 @@ export function AdminApp() {
         </div>
       )}
 
-      {/* ---------- SERVICE / HISTORIQUE ---------- */}
-      {(isServiceView || isHistoryView) && (
+      {/* ---------- SERVICE ---------- */}
+      {isServiceView && (
         <section className="mt-6">
+          {/* Ligne 1 : jour + rafraîchir */}
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm font-bold">
               Jour :
@@ -1403,30 +1413,31 @@ export function AdminApp() {
                 value={day}
                 max={parisToday()}
                 onChange={(e) => setDay(e.target.value)}
-                className="rounded-xl border-2 border-ink/12 px-3 py-1.5"
+                className="min-h-[40px] rounded-xl border-2 border-ink/12 px-3 py-1.5"
               />
             </label>
             <button type="button" onClick={() => setReloadKey((k) => k + 1)} className="btn-outline btn-sm">
               Rafraîchir
             </button>
+          </div>
 
-            {/* Recherche */}
-            <label className="relative ml-auto">
+          {/* Ligne 2 : recherche + filtre (repliés sous « Filtres » sur téléphone) */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+            <label className="relative max-md:w-full">
               <span className="sr-only">Rechercher une commande</span>
               <input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="🔍 Code, nom, téléphone…"
-                className="w-56 rounded-full border-2 border-ink/12 bg-white px-4 py-2 text-sm outline-none focus:border-tomato"
+                className="min-h-[40px] w-56 rounded-full border-2 border-ink/12 bg-white px-4 py-2 text-sm outline-none focus:border-tomato max-md:w-full"
               />
             </label>
 
-            {/* Filtre statut */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="rounded-full border-2 border-ink/12 bg-white px-3 py-2 text-sm font-bold"
+              className="min-h-[40px] rounded-full border-2 border-ink/12 bg-white px-3 py-2 text-sm font-bold"
               aria-label="Filtrer par statut"
             >
               <option value="all">Tous les statuts</option>
@@ -1437,30 +1448,55 @@ export function AdminApp() {
               ))}
             </select>
 
-            <button
-              type="button"
-              onClick={exportCsv}
-              disabled={!filteredOrders?.length}
-              className="btn-outline btn-sm disabled:opacity-40"
-              title="Exporter vers un tableur"
-            >
-              ⬇ CSV
-            </button>
-            <button
-              type="button"
-              onClick={printDay}
-              disabled={!filteredOrders?.length}
-              className="btn-outline btn-sm disabled:opacity-40"
-              title="Imprimer les étiquettes cuisine des commandes non annulées"
-            >
-              🖨️ Étiquettes
-            </button>
+            <details className="max-md:w-full md:hidden">
+              <summary className="inline-flex min-h-[40px] cursor-pointer items-center rounded-full border-2 border-ink/12 bg-white px-4 py-2 text-sm font-extrabold uppercase">
+                ⋯ Actions
+              </summary>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  disabled={!filteredOrders?.length}
+                  className="btn-outline btn-sm min-h-[40px] disabled:opacity-40"
+                >
+                  ⬇ CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={printDay}
+                  disabled={!filteredOrders?.length}
+                  className="btn-outline btn-sm min-h-[40px] disabled:opacity-40"
+                >
+                  🖨️ Étiquettes
+                </button>
+              </div>
+            </details>
+            <div className="max-md:hidden">
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={!filteredOrders?.length}
+                className="btn-outline btn-sm disabled:opacity-40"
+                title="Exporter vers un tableur"
+              >
+                ⬇ CSV
+              </button>
+              <button
+                type="button"
+                onClick={printDay}
+                disabled={!filteredOrders?.length}
+                className="btn-outline btn-sm ml-2 disabled:opacity-40"
+                title="Imprimer les étiquettes cuisine des commandes non annulées"
+              >
+                🖨️ Étiquettes
+              </button>
+            </div>
           </div>
 
           <p className="mt-3 text-xs text-ink/45">
             {filteredOrders?.length ?? 0} commande{(filteredOrders?.length ?? 0) > 1 ? "s" : ""} affichée
             {(filteredOrders?.length ?? 0) > 1 ? "s" : ""}
-            {isHistoryView && " — historique : parcours les jours passés avec le sélecteur"}
+            {isPastDay && " — historique d'un jour passé"}
           </p>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">

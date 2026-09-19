@@ -596,9 +596,11 @@ export async function handleAdminLogin(
   }
   if (loginAttemptsByEmail.size > 1_000) loginAttemptsByEmail.clear();
 
-  // Allowlist AVANT tout contact avec Supabase : un email hors liste ne
-  // produit aucun indice (même message et même délai qu'un mauvais mot de passe).
-  if (!ALLOWED_EMAILS().includes(email)) {
+  // Rôle AVANT tout contact avec Supabase : un email sans compte (ni allowlist
+  // gérant, ni ligne admin_users) ne produit aucun indice — même message et
+  // même délai qu'un mauvais mot de passe.
+  const preRole = await resolveRole(email);
+  if (!preRole) {
     return bad(401, "INVALID_CREDENTIALS",
       { message: "Email ou mot de passe incorrect." });
   }

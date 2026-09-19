@@ -27,10 +27,9 @@ const handlers = {
   "/api/admin/orders": { mod: "../api/admin/orders.ts", method: "GET" },
   "/api/admin/order-status": { mod: "../api/admin/order-status.ts", method: "POST" },
   "/api/admin/stats": { mod: "../api/admin/stats.ts", method: "GET" },
-  "/api/admin/menu": { mod: "../api/admin/menu.ts", method: "POST" },
-  "/api/admin/menu-get": { mod: "../api/admin/menu-get.ts", method: "GET" },
-  "/api/admin/settings": { mod: "../api/admin/settings.ts", method: "POST" },
-  "/api/admin/settings-get": { mod: "../api/admin/settings-get.ts", method: "GET" },
+  "/api/admin/menu": { mod: "../api/admin/menu.ts", methods: ["GET", "POST"] },
+  "/api/admin/settings": { mod: "../api/admin/settings.ts", methods: ["GET", "POST"] },
+  "/api/admin/users": { mod: "../api/admin/users.ts", method: "POST" },
 };
 
 // tsx exécute TypeScript directement (devDependency, pas de build).
@@ -48,8 +47,9 @@ const server = createServer(async (req, res) => {
   }
 
   const method = req.method ?? "GET";
-  if (method !== route.method) {
-    res.writeHead(405, { "Content-Type": "application/json", Allow: route.method });
+  const allowed = route.methods ?? [route.method];
+  if (!allowed.includes(method)) {
+    res.writeHead(405, { "Content-Type": "application/json", Allow: allowed.join(", ") });
     res.end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
     return;
   }
