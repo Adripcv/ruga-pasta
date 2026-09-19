@@ -56,8 +56,9 @@ const server = createServer(async (req, res) => {
 
   try {
     const mod = await import(route.mod);
-    // Vercel exporte `{ fetch }` ; le serveur local accepte les deux formes.
-    const handler = mod.default?.fetch ?? mod.default;
+    // Priorité : le handler Web nommé (utilisé ici) ; `default` est le pont
+    // Vercel Node, inutile en local.
+    const handler = mod.handler ?? mod.default?.fetch ?? mod.default;
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
       if (typeof value === "string") headers.set(key, value);

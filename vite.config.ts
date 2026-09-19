@@ -170,6 +170,7 @@ export default defineConfig(({ mode }) => {
           main: resolve(__dirname, "index.html"),
           order: resolve(__dirname, "commander.html"),
           admin: resolve(__dirname, "admin.html"),
+          privacy: resolve(__dirname, "confidentialite.html"),
         },
       },
     },

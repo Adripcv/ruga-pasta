@@ -10,5 +10,7 @@ export async function handler(req: Request): Promise<Response> {
   return json(await handleAdminUpdateOrder({ token: bearerFrom(req) }, body));
 }
 
-// Runtime Vercel (Node) : signature Web standard = objet avec méthode fetch.
-export default { fetch: handler };
+
+import { bridge } from "../_lib/vercel-bridge";
+
+export default bridge(handler);
