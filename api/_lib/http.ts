@@ -3,7 +3,7 @@
  * Signature Web standard (Request → Response) : marche sur Vercel ET dans le
  * serveur de dev local (`scripts/dev-api.mjs`) avec le même code.
  */
-import type { ApiResponse } from "./handlers";
+import type { ApiResponse } from "./handlers.js";
 
 export function json(res: ApiResponse): Response {
   return new Response(JSON.stringify(res.body), {

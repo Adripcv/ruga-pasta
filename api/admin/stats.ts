@@ -1,8 +1,8 @@
 /**
  * GET /api/admin/stats?days=N — chiffres du click & collect (gérant).
  */
-import { handleAdminStats } from "../_lib/handlers";
-import { bearerFrom, json, methodNotAllowed } from "../_lib/http";
+import { handleAdminStats } from "../_lib/handlers.js";
+import { bearerFrom, json, methodNotAllowed } from "../_lib/http.js";
 
 export async function handler(req: Request): Promise<Response> {
   if (req.method !== "GET") return methodNotAllowed("GET");
@@ -11,6 +11,6 @@ export async function handler(req: Request): Promise<Response> {
 }
 
 
-import { bridge } from "../_lib/vercel-bridge";
+import { bridge } from "../_lib/vercel-bridge.js";
 
 export default bridge(handler);

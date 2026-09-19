@@ -19,7 +19,7 @@ import {
   validateCustomer,
   type MenuNode,
   type StoreSettings,
-} from "./domain";
+} from "./domain.js";
 
 // ---------------------------------------------------------------------------
 // Jeux d'essai

@@ -1,8 +1,8 @@
 /**
  * POST /api/admin/menu — prix / rupture / activation d'un produit (gérant).
  */
-import { handleAdminMenuUpdate } from "../_lib/handlers";
-import { bearerFrom, json, methodNotAllowed, readJson } from "../_lib/http";
+import { handleAdminMenuUpdate } from "../_lib/handlers.js";
+import { bearerFrom, json, methodNotAllowed, readJson } from "../_lib/http.js";
 
 export async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return methodNotAllowed("POST");
@@ -11,6 +11,6 @@ export async function handler(req: Request): Promise<Response> {
 }
 
 
-import { bridge } from "../_lib/vercel-bridge";
+import { bridge } from "../_lib/vercel-bridge.js";
 
 export default bridge(handler);

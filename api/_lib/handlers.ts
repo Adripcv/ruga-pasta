@@ -27,7 +27,7 @@ import {
   type MenuNode,
   type PricedLine,
   type StoreSettings,
-} from "./domain";
+} from "./domain.js";
 import {
   clientKeyFromIp,
   getSettings,
@@ -35,7 +35,7 @@ import {
   invalidateMenuCache,
   isDbConfigured,
   serviceRole,
-} from "./db";
+} from "./db.js";
 
 // ---------------------------------------------------------------------------
 // Réponses

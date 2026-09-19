@@ -3,8 +3,8 @@
  * Le navigateur ne parle jamais à Supabase directement : l'allowlist email
  * est vérifiée AVANT toute requête d'authentification.
  */
-import { handleAdminLogin } from "../_lib/handlers";
-import { ipFrom, json, methodNotAllowed, readJson } from "../_lib/http";
+import { handleAdminLogin } from "../_lib/handlers.js";
+import { ipFrom, json, methodNotAllowed, readJson } from "../_lib/http.js";
 
 export async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return methodNotAllowed("POST");
@@ -13,6 +13,6 @@ export async function handler(req: Request): Promise<Response> {
 }
 
 
-import { bridge } from "../_lib/vercel-bridge";
+import { bridge } from "../_lib/vercel-bridge.js";
 
 export default bridge(handler);

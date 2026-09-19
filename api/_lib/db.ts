@@ -12,7 +12,7 @@
  * uniquement `process.env`, absent du bundle front.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { MenuNode, StoreSettings } from "./domain";
+import type { MenuNode, StoreSettings } from "./domain.js";
 
 let cachedService: SupabaseClient | null = null;
 
