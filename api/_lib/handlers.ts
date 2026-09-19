@@ -36,6 +36,7 @@ import {
   isDbConfigured,
   serviceRole,
 } from "./db.js";
+import { aggregateStats } from "./stats.js";
 
 // ---------------------------------------------------------------------------
 // Réponses
@@ -773,7 +774,7 @@ export async function handleAdminUpdateOrder(
   return ok({ ok: true, code: payload.code, status: next });
 }
 
-/** GET /api/admin/stats?days=N — CA, commandes, top ventes. */
+/** GET /api/admin/stats?days=N — analytics riches pour le dashboard. */
 export async function handleAdminStats(
   ctx: AdminContext,
   daysParam: string | null,
@@ -782,39 +783,56 @@ export async function handleAdminStats(
   if (!auth.ok) return auth.response;
 
   const days = Math.min(Math.max(Number(daysParam ?? 7) || 7, 1), 90);
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const now = new Date();
+  // Deux périodes (courante + précédente) en une requête : les tendances
+  // ↗ ↘ comparent toujours des durées identiques.
+  const since = new Date(now.getTime() - 2 * days * 86_400_000).toISOString();
 
   const { data, error } = await serviceRole()
     .from("orders")
-    .select("total_cents, status, created_at, order_items(name, qty, line_cents)")
-    .gte("created_at", since)
-    .neq("status", "cancelled");
+    .select("created_at, pickup_at, status, total_cents, order_items(name, qty, line_cents)")
+    .gte("created_at", since);
 
   if (error) return bad(500, "DB_ERROR");
-  const orders = data ?? [];
 
-  const revenue = orders.reduce((s, o) => s + (o.total_cents ?? 0), 0);
-  const itemCount = new Map<string, number>();
-  for (const o of orders) {
-    for (const item of o.order_items ?? []) {
-      itemCount.set(item.name, (itemCount.get(item.name) ?? 0) + item.qty);
-    }
-  }
-  const top = [...itemCount.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, qty]) => ({ name, qty }));
-
-  return ok({
-    days,
-    revenue_cents: revenue,
-    order_count: orders.length,
-    average_cents: orders.length ? Math.round(revenue / orders.length) : 0,
-    top_items: top,
-  });
+  return ok(
+    aggregateStats(
+      (data ?? []) as never,
+      days,
+      now,
+    ),
+  );
 }
 
-/** POST /api/admin/menu — prix / rupture / activation d'un produit. */
+/* -------------------------------------------------------------------------- */
+/*  CARTE — CRUD complet (prix/rupture/activation, création, renommage,       */
+/*  réordonnancement, suppression). Une seule endpoint POST /api/admin/menu   */
+/*  avec un champ `action` : reste sous la limite de fonctions Vercel.        */
+/* -------------------------------------------------------------------------- */
+
+/** Identifiant technique dérivé du nom (slug ASCII) + suffixe unique court. */
+function slugify(name: string): string {
+  const base = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return `${base || "noeud"}-${suffix}`;
+}
+
+/**
+ * POST /api/admin/menu
+ * actions :
+ *  - { action?: "update", id, price_cents?, sold_out?, is_active? }
+ *  - { action: "create", parent_id, name, price_cents, max_qty? }
+ *  - { action: "rename", id, name }
+ *  - { action: "delete", id }            (refusé si des commandes y réfèrent)
+ *  - { action: "reorder", id, sort_order }
+ *  - { action: "toggle_sold_out_section", id, sold_out }  (section + descendants)
+ */
 export async function handleAdminMenuUpdate(
   ctx: AdminContext,
   body: unknown,
@@ -822,46 +840,180 @@ export async function handleAdminMenuUpdate(
   const auth = await requireAdmin(ctx);
   if (!auth.ok) return auth.response;
 
-  const payload = body as {
-    id?: unknown;
-    price_cents?: unknown;
-    sold_out?: unknown;
-    is_active?: unknown;
-  } | null;
+  const payload = body as Record<string, unknown> | null;
+  if (!payload || typeof payload !== "object") return bad(400, "BAD_PAYLOAD");
+  const action = typeof payload.action === "string" ? payload.action : "update";
+  const id = typeof payload.id === "string" ? payload.id.slice(0, 60) : "";
 
-  if (!payload || typeof payload.id !== "string" || payload.id.length > 60) {
-    return bad(400, "BAD_PAYLOAD");
+  // ---- update (prix / rupture / activation) -------------------------------
+  if (action === "update") {
+    if (!id) return bad(400, "BAD_PAYLOAD");
+    const patch: Record<string, unknown> = {};
+    if (payload.price_cents !== undefined) {
+      if (
+        typeof payload.price_cents !== "number" ||
+        !Number.isInteger(payload.price_cents) ||
+        payload.price_cents < 0 ||
+        payload.price_cents > 10_000
+      ) {
+        return bad(400, "BAD_PRICE");
+      }
+      patch.price_cents = payload.price_cents;
+    }
+    if (payload.sold_out !== undefined) {
+      if (typeof payload.sold_out !== "boolean") return bad(400, "BAD_PAYLOAD");
+      patch.sold_out = payload.sold_out;
+    }
+    if (payload.is_active !== undefined) {
+      if (typeof payload.is_active !== "boolean") return bad(400, "BAD_PAYLOAD");
+      patch.is_active = payload.is_active;
+    }
+    if (Object.keys(patch).length === 0) return bad(400, "NOTHING_TO_UPDATE");
+
+    const { error } = await serviceRole()
+      .from("menu_nodes")
+      .update(patch)
+      .eq("id", id);
+    if (error) return bad(500, "DB_ERROR");
+    invalidateMenuCache();
+    return ok({ ok: true });
   }
-  const patch: Record<string, unknown> = {};
-  if (payload.price_cents !== undefined) {
+
+  // ---- create (nouveau produit ou groupe) ---------------------------------
+  if (action === "create") {
+    const parent = typeof payload.parent_id === "string" ? payload.parent_id.slice(0, 60) : "";
+    const name = typeof payload.name === "string" ? payload.name.trim().slice(0, 80) : "";
+    const price = payload.price_cents;
+    const maxQty = payload.max_qty;
+    if (!parent || name.length < 2) return bad(400, "BAD_PAYLOAD");
     if (
-      typeof payload.price_cents !== "number" ||
-      !Number.isInteger(payload.price_cents) ||
-      payload.price_cents < 0 ||
-      payload.price_cents > 10_000
+      typeof price !== "number" ||
+      !Number.isInteger(price) ||
+      price < 0 ||
+      price > 10_000
     ) {
       return bad(400, "BAD_PRICE");
     }
-    patch.price_cents = payload.price_cents;
-  }
-  if (payload.sold_out !== undefined) {
-    if (typeof payload.sold_out !== "boolean") return bad(400, "BAD_PAYLOAD");
-    patch.sold_out = payload.sold_out;
-  }
-  if (payload.is_active !== undefined) {
-    if (typeof payload.is_active !== "boolean") return bad(400, "BAD_PAYLOAD");
-    patch.is_active = payload.is_active;
-  }
-  if (Object.keys(patch).length === 0) return bad(400, "NOTHING_TO_UPDATE");
+    if (
+      typeof maxQty !== "undefined" &&
+      (typeof maxQty !== "number" || !Number.isInteger(maxQty) || maxQty < 1 || maxQty > 20)
+    ) {
+      return bad(400, "BAD_PAYLOAD");
+    }
 
-  const { error } = await serviceRole()
-    .from("menu_nodes")
-    .update(patch)
-    .eq("id", payload.id);
-  if (error) return bad(500, "DB_ERROR");
+    // Le parent doit exister ; position = max(sort_order) des frères + 10.
+    const { data: parentRow, error: parentErr } = await serviceRole()
+      .from("menu_nodes")
+      .select("id, kind")
+      .eq("id", parent)
+      .maybeSingle();
+    if (parentErr) return bad(500, "DB_ERROR");
+    if (!parentRow) return bad(404, "PARENT_NOT_FOUND");
 
-  invalidateMenuCache();
-  return ok({ ok: true });
+    const { data: siblings } = await serviceRole()
+      .from("menu_nodes")
+      .select("sort_order")
+      .eq("parent_id", parent)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    const nextOrder = ((siblings?.[0]?.sort_order as number) ?? 0) + 10;
+
+    const kind = price === 0 || typeof price === "number" ? "item" : "item";
+    const { error } = await serviceRole().from("menu_nodes").insert({
+      id: slugify(name),
+      parent_id: parent,
+      name,
+      kind,
+      price_cents: price,
+      max_qty: typeof maxQty === "number" ? maxQty : 5,
+      sort_order: nextOrder,
+    });
+    if (error) return bad(500, "DB_ERROR", { message: error.message });
+    invalidateMenuCache();
+    return ok({ ok: true });
+  }
+
+  // ---- rename -------------------------------------------------------------
+  if (action === "rename") {
+    const name = typeof payload.name === "string" ? payload.name.trim().slice(0, 80) : "";
+    if (!id || name.length < 2) return bad(400, "BAD_PAYLOAD");
+    const { error } = await serviceRole()
+      .from("menu_nodes")
+      .update({ name })
+      .eq("id", id);
+    if (error) return bad(500, "DB_ERROR");
+    invalidateMenuCache();
+    return ok({ ok: true });
+  }
+
+  // ---- reorder (flèches ↑ ↓ du dashboard) ---------------------------------
+  if (action === "reorder") {
+    const sortOrder = payload.sort_order;
+    if (!id || typeof sortOrder !== "number" || !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 9_999) {
+      return bad(400, "BAD_PAYLOAD");
+    }
+    const { error } = await serviceRole()
+      .from("menu_nodes")
+      .update({ sort_order: sortOrder })
+      .eq("id", id);
+    if (error) return bad(500, "DB_ERROR");
+    invalidateMenuCache();
+    return ok({ ok: true });
+  }
+
+  // ---- toggle rupture d'une SECTION entière (ex. tous les desserts) -------
+  if (action === "toggle_sold_out_section") {
+    const soldOut = payload.sold_out;
+    if (!id || typeof soldOut !== "boolean") return bad(400, "BAD_PAYLOAD");
+    // RLS n'est pas en jeu (service_role) : mise à jour récursive via une
+    // lecture des descendants puis update in (...).
+    const { data: all, error: readErr } = await serviceRole()
+      .from("menu_nodes")
+      .select("id, parent_id");
+    if (readErr || !all) return bad(500, "DB_ERROR");
+    const childrenOf = new Map<string | null, string[]>();
+    for (const row of all as { id: string; parent_id: string | null }[]) {
+      const key = row.parent_id ?? "";
+      childrenOf.set(key, [...(childrenOf.get(key) ?? []), row.id]);
+    }
+    const descendants: string[] = [];
+    const stack = [id];
+    while (stack.length) {
+      const current = stack.pop()!;
+      descendants.push(current);
+      for (const child of childrenOf.get(current) ?? []) stack.push(child);
+    }
+    const { error } = await serviceRole()
+      .from("menu_nodes")
+      .update({ sold_out: soldOut })
+      .in("id", descendants);
+    if (error) return bad(500, "DB_ERROR");
+    invalidateMenuCache();
+    return ok({ ok: true, affected: descendants.length });
+  }
+
+  // ---- delete (refusé si l'historique des commandes y réfère) -------------
+  if (action === "delete") {
+    if (!id) return bad(400, "BAD_PAYLOAD");
+    if (id === "menu") return bad(400, "PROTECTED_NODE");
+    const { count, error: countErr } = await serviceRole()
+      .from("order_items")
+      .select("id", { count: "exact", head: true })
+      .eq("node_id", id);
+    if (countErr) return bad(500, "DB_ERROR");
+    if ((count ?? 0) > 0) {
+      return bad(409, "IN_USE",
+        { message: "Des commandes passées référencent cet article — désactive-le plutôt (il disparaîtra du tunnel)." });
+    }
+    // Enfants d'abord (cascade SQL existe, mais on garde le contrôle).
+    await serviceRole().from("menu_nodes").delete().eq("parent_id", id);
+    const { error } = await serviceRole().from("menu_nodes").delete().eq("id", id);
+    if (error) return bad(500, "DB_ERROR");
+    invalidateMenuCache();
+    return ok({ ok: true });
+  }
+
+  return bad(400, "UNKNOWN_ACTION");
 }
 
 /** POST /api/admin/settings — réglages opérationnels. */
